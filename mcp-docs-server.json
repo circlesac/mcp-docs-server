@@ -1,0 +1,6 @@
+{
+  "name": "Circles MCP Docs Server",
+  "package": "@circlesac/mcp-docs-server",
+  "version": "0.0.1",
+  "docs": "docs"
+}
