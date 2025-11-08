@@ -6,6 +6,8 @@ Have Markdown files (knowledge) you want to share across workspaces or your comp
 
 Make your Markdown docs feel alive in coding agents like Cursor and Claude. When you’re ready to roll it out to your team, publish as an npm package for consistent installs—everyone gets the same version with zero extra setup.
 
+> Inspired by Mastra’s excellent [Mastra Docs Server](https://mastra.ai/docs/getting-started/mcp-docs-server), which shows how powerful doc-focused MCP servers can be.
+
 If you're using Cursor, click "Add to Cursor" below to add the `@circlesac/mcp-docs-server` documentation with one click.
 
 <!-- Primary CTA: Add to Cursor -->
