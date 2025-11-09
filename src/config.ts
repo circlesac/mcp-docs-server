@@ -35,6 +35,26 @@ export interface DocsServerConfig {
 let cachedConfig: DocsServerConfig | null = null
 let cachedTemplate: string | null = null
 
+function createToolName(rawName: string, rawPackage: string): string {
+	const candidates = [rawName, rawPackage]
+
+	for (const candidate of candidates) {
+		const cleaned = candidate
+			.trim()
+			.replace(/[^a-zA-Z0-9]+/g, " ")
+			.split(" ")
+			.filter(Boolean)
+			.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+			.join("")
+
+		if (cleaned.length > 0) {
+			return `search${cleaned}`
+		}
+	}
+
+	return DEFAULT_TOOL_NAME
+}
+
 async function loadTemplate(): Promise<string> {
 	if (cachedTemplate) {
 		return cachedTemplate
@@ -136,15 +156,16 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 	await ensureDirectoryExists(docRoot.absolutePath)
 
 	const name = rawConfig.name.trim().length === 0 ? "Acme" : rawConfig.name.trim()
+	const toolName = createToolName(rawConfig.name, rawConfig.package)
 	const title = `${name} Documentation Server`
 	const template = await loadTemplate()
-	const description = template.replace(/{{NAME}}/g, name)
+	const description = template.replace(/{{NAME}}/g, name).replace(/{{TOOL_NAME}}/g, toolName)
 	const config: DocsServerConfig = {
 		name,
 		title,
 		packageName: rawConfig.package,
 		version: rawConfig.version,
-		tool: DEFAULT_TOOL_NAME,
+		tool: toolName,
 		description,
 		docRoot,
 		configPath,

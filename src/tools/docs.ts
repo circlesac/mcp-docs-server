@@ -3,7 +3,7 @@ import path from "node:path"
 import { z } from "zod"
 
 import type { DocRoot } from "../config.js"
-import { DEFAULT_TOOL_NAME, getConfig } from "../config.js"
+import { getConfig } from "../config.js"
 import { logger } from "../logger.js"
 import { getMatchingPaths, normalizeDocPath } from "../utils.js"
 
@@ -285,13 +285,14 @@ export async function createDocsTool() {
 	const docsParameters = docsParametersSchema.extend({
 		paths: pathsSchema.describe(pathsDescription)
 	})
+	const toolName = config.tool
 
 	return {
-		name: DEFAULT_TOOL_NAME,
+		name: toolName,
 		description: config.description,
 		parameters: docsParameters,
 		execute: async (args: DocsInput) => {
-			void logger.debug(`Executing ${DEFAULT_TOOL_NAME} tool`, { args })
+			void logger.debug(`Executing ${toolName} tool`, { args })
 			const queryKeywords = args.queryKeywords ?? []
 			const docRoot = config.docRoot.absolutePath
 			const availablePaths = await buildAvailablePaths()

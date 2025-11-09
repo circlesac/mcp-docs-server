@@ -1,6 +1,6 @@
 # Circles MCP Docs Server
 
-Welcome to the bundled documentation for `@circlesac/mcp-docs-server`. This server is shipped with the CLI so you can kick the tires immediately.
+Welcome to the bundled documentation for `mcp-docs-server`. This server is shipped with the CLI so you can kick the tires immediately.
 
 ## What's Included
 
@@ -16,4 +16,4 @@ Use the MCP client of your choice to query this server. Paths available here mir
 - `overview/configuration.md` – details the `mcp-docs-server.json` contract.
 - `workflows/publish.md` – walks through the npm publishing flow.
 
-Explore further by requesting any of those paths via the `searchDocs` tool.
+Explore further by requesting any of those paths via the `searchMcpDocsServer` tool.

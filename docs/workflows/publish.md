@@ -1,6 +1,6 @@
 # Publishing Workflow
 
-The `publish` command packages your docs and config into an installable npm module. The module embeds a thin wrapper that boots the MCP server from the bundled assets.
+The `publish` command packages your docs and config into an installable npm module. The module embeds a thin wrapper that boots the MCP server from the bundled assets. We refer to the product as `mcp-docs-server`; the published npm artifact can live under whatever scope you choose (`@circlesac/mcp-docs-server` in this repository).
 
 ## Dry run
 

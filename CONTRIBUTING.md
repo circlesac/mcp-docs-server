@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve `@circlesac/mcp-docs-server`! This document covers everything you need to work on the project locally.
+Thanks for helping improve `mcp-docs-server`! This document covers everything you need to work on the project locally.
 
 ## Prerequisites
 
