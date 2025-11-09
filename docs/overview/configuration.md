@@ -1,6 +1,6 @@
 # Configuration Reference
 
-`mcp-docs-server.json` is the only required configuration file. It lives next to your `docs/` directory.
+`mcp-docs-server.json` is the only required configuration file. It lives next to your `docs/` directory. Throughout the docs we call the product `mcp-docs-server`; when you publish, use whatever npm scope fits your org (the default package we ship is `@circlesac/mcp-docs-server`).
 
 ## Configuration Fields
 
@@ -29,7 +29,7 @@ The CLI intentionally keeps configuration minimal to reduce complexity and maint
 - **Single doc root**: One `docs` directory per config file keeps paths predictable and avoids merge conflicts. You can organize content with any number of subfolders (e.g., `docs/guides/`, `docs/reference/`).
 - **Security boundaries**: Path traversal attempts (`..` segments) are rejected to prevent access outside the configured doc root.
 - **Auto-generated metadata**: Tool title and description are derived from the `name` field using a template, ensuring consistency without manual copy.
-- **Fixed tool name**: The CLI always exposes `searchDocs` as the tool name, so MCP clients know what to expect.
+- **Deterministic tool name**: The CLI derives the MCP tool name from your `name` field (for example, `searchAcme`), falling back to `searchDocs` only if it can't generate a value.
 
 ## Common Questions
 

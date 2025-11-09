@@ -8,7 +8,7 @@ import { fromPackageRoot } from "./utils.js"
 const PACKAGE_CONFIG_PATH = fromPackageRoot("mcp-docs-server.json")
 
 async function printUsage(): Promise<void> {
-	await logger.info(`Usage: mcp-docs-server [command]
+	await logger.info(`Usage: npx @circlesac/mcp-docs-server [command]
 
 Commands:
   serve      Start the MCP docs server from the current directory
@@ -18,9 +18,7 @@ Commands:
 Options:
   serve --config <path>   Path to mcp-docs-server.json (default: ./mcp-docs-server.json)
   serve --docs <path>     Path to docs directory (overrides config file)
-  publish --output <dir>  Stage the npm package in <dir> instead of publishing
-
-No command runs the bundled documentation for @circlesac/mcp-docs-server.`)
+  publish --output <dir>  Stage the npm package in <dir> instead of publishing`)
 }
 
 function parseServeArgs(args: string[]): { configPath?: string; docs?: string } {

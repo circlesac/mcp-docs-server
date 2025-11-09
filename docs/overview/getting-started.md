@@ -1,6 +1,6 @@
-# Getting Started with `@circlesac/mcp-docs-server`
+# Getting Started with `mcp-docs-server`
 
-Have a bunch of documents you want to share? If they're in Markdown format, you came to the right place. Spin up a simple MCP documentation server using `@circlesac/mcp-docs-server`.
+Have a bunch of documents you want to share? If they're in Markdown format, you came to the right place. Spin up a simple MCP documentation server using `mcp-docs-server`.
 
 ## Serve your own docs
 
@@ -78,7 +78,7 @@ For a published npm package like `@acme/mcp-docs-server`, add it to your MCP ser
 }
 ```
 
-The `-y` flag automatically accepts the npx prompt. Cursor will use the `searchDocs` tool to query your documentation.
+The `-y` flag automatically accepts the npx prompt. Cursor will use the dynamically generated tool name (for example, `searchMcpDocsServer` for this package, or `searchAcme` in the test fixtures) to query your documentation.
 
 ## Create an "Add to Cursor" button
 

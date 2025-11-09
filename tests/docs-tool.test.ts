@@ -22,6 +22,10 @@ describe("generic docs tool", () => {
 		clearConfigCache()
 	})
 
+	it("exposes a generated tool name", () => {
+		expect(docsTool.name).toBe("searchAcme")
+	})
+
 	it("returns markdown content for a requested file", async () => {
 		const result = await docsTool.execute({ paths: ["index.md"] })
 		expect(result).toContain("Acme documentation")

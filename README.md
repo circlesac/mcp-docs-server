@@ -1,4 +1,4 @@
-# @circlesac/mcp-docs-server
+# mcp-docs-server
 
 > Share your knowledge as an MCP server.
 
@@ -8,7 +8,7 @@ Make your Markdown docs feel alive in coding agents like Cursor and Claude. When
 
 > Inspired by Mastra’s excellent [Mastra Docs Server](https://mastra.ai/docs/getting-started/mcp-docs-server), which shows how powerful doc-focused MCP servers can be.
 
-If you're using Cursor, click "Add to Cursor" below to add the `@circlesac/mcp-docs-server` documentation with one click.
+If you're using Cursor, click "Add to Cursor" below to add the `mcp-docs-server` documentation with one click.
 
 <!-- Primary CTA: Add to Cursor -->
 <a href="https://cursor.com/en-US/install-mcp?name=circlesac-docs&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBjaXJjbGVzYWMvbWNwLWRvY3Mtc2VydmVyIl19">
