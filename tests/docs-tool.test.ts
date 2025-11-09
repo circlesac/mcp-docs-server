@@ -11,11 +11,11 @@ const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
 const configPath = path.join(fixtureRoot, "mcp-docs-server.json")
 
 describe("generic docs tool", () => {
-	let docsTool: ReturnType<typeof createDocsTool>
+	let docsTool: Awaited<ReturnType<typeof createDocsTool>>
 
 	beforeAll(async () => {
 		await loadConfig({ configPath })
-		docsTool = createDocsTool()
+		docsTool = await createDocsTool()
 	})
 
 	afterAll(() => {

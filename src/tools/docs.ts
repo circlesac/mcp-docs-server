@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
 
+import type { DocRoot } from "../config.js"
 import { DEFAULT_TOOL_NAME, getConfig } from "../config.js"
 import { logger } from "../logger.js"
 import { getMatchingPaths, normalizeDocPath } from "../utils.js"
@@ -13,8 +14,9 @@ interface ResolvedDocPath {
 	relativePath: string
 }
 
-const docsParameters = z.object({
-	paths: z.array(z.string()).min(1).describe("One or more documentation paths to fetch."),
+const pathsSchema = z.array(z.string()).min(1)
+const docsParametersSchema = z.object({
+	paths: pathsSchema,
 	queryKeywords: z
 		.array(z.string())
 		.optional()
@@ -23,7 +25,83 @@ const docsParameters = z.object({
 		)
 })
 
-type DocsInput = z.infer<typeof docsParameters>
+type DocsInput = z.infer<typeof docsParametersSchema>
+
+interface TopLevelEntries {
+	directories: string[]
+	referenceSubdirectories: string[]
+	files: string[]
+}
+
+function isMarkdownFile(name: string): boolean {
+	return /\.mdx?$/i.test(name)
+}
+
+async function collectTopLevelEntries(docRoot: DocRoot): Promise<TopLevelEntries> {
+	const entries = await fs.readdir(docRoot.absolutePath, { withFileTypes: true })
+
+	const directoryNames: string[] = []
+	const fileNames: string[] = []
+
+	for (const entry of entries) {
+		if (entry.isDirectory()) {
+			directoryNames.push(entry.name)
+		} else if (entry.isFile() && isMarkdownFile(entry.name)) {
+			fileNames.push(entry.name)
+		}
+	}
+
+	directoryNames.sort((a, b) => a.localeCompare(b))
+	fileNames.sort((a, b) => a.localeCompare(b))
+
+	let referenceSubdirectories: string[] = []
+	if (directoryNames.includes("reference")) {
+		try {
+			const referenceEntries = await fs.readdir(path.join(docRoot.absolutePath, "reference"), { withFileTypes: true })
+			const refs = referenceEntries
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => `reference/${entry.name}/`)
+				.sort((a, b) => a.localeCompare(b))
+			referenceSubdirectories = refs
+		} catch (error) {
+			await logger.warning("Failed to read reference subdirectories", {
+				error: error instanceof Error ? error.message : String(error)
+			})
+		}
+	}
+
+	const directories = directoryNames.map((name) => `${name}/`)
+	const files = fileNames
+
+	return {
+		directories,
+		referenceSubdirectories,
+		files
+	}
+}
+
+async function buildPathsDescription(docRoot: DocRoot): Promise<string> {
+	const { directories, referenceSubdirectories, files } = await collectTopLevelEntries(docRoot)
+	const lines: string[] = ["One or more documentation paths to fetch", "Available paths:", "Available top-level paths:"]
+
+	if (directories.length > 0) {
+		lines.push("Directories:", ...directories.map((dir) => `- ${dir}`))
+	} else {
+		lines.push("Directories:", "- (none)")
+	}
+
+	if (referenceSubdirectories.length > 0) {
+		lines.push("Reference subdirectories:", ...referenceSubdirectories.map((ref) => `- ${ref}`))
+	}
+
+	if (files.length > 0) {
+		lines.push("Files:", ...files.map((file) => `- ${file}`))
+	} else {
+		lines.push("Files:", "- (none)")
+	}
+
+	return lines.join("\n")
+}
 
 function hasTraversal(input: string): boolean {
 	return input.split("/").some((segment) => segment === "..")
@@ -176,30 +254,37 @@ async function readMdContent(docPath: string, queryKeywords: string[]): Promise<
 
 async function buildAvailablePaths(): Promise<string> {
 	const { docRoot } = getConfig()
-	const sections: string[] = []
-	const rootLabel = docRoot.relativePath === "." ? "root" : docRoot.relativePath
-	const resolved: ResolvedDocPath = {
-		absolutePath: docRoot.absolutePath,
-		relativePath: "."
-	}
-	const { dirs, files } = await listDirContents(docRoot.relativePath === "." ? "" : docRoot.relativePath, resolved)
-	sections.push(`Root "${rootLabel}":`)
-	if (dirs.length > 0) {
-		sections.push("Directories:", ...dirs.map((dir) => `- ${dir}`))
+	const { directories, referenceSubdirectories, files } = await collectTopLevelEntries(docRoot)
+	const rootLabel = docRoot.relativePath === "." ? "documentation root" : docRoot.relativePath
+	const lines: string[] = [`Available top-level paths under "${rootLabel}":`, ""]
+
+	lines.push("Directories:")
+	if (directories.length > 0) {
+		lines.push(...directories.map((dir) => `- ${dir}`))
 	} else {
-		sections.push("No directories found.")
-	}
-	if (files.length > 0) {
-		sections.push("Files:", ...files.map((file) => `- ${file}`))
-	} else {
-		sections.push("No Markdown files found.")
+		lines.push("- (none)")
 	}
 
-	return sections.join("\n").trim()
+	if (referenceSubdirectories.length > 0) {
+		lines.push("", "Reference subdirectories:", ...referenceSubdirectories.map((ref) => `- ${ref}`))
+	}
+
+	lines.push("", "Files:")
+	if (files.length > 0) {
+		lines.push(...files.map((file) => `- ${file}`))
+	} else {
+		lines.push("- (none)")
+	}
+
+	return lines.join("\n").trim()
 }
 
-export function createDocsTool() {
+export async function createDocsTool() {
 	const config = getConfig()
+	const pathsDescription = await buildPathsDescription(config.docRoot)
+	const docsParameters = docsParametersSchema.extend({
+		paths: pathsSchema.describe(pathsDescription)
+	})
 
 	return {
 		name: DEFAULT_TOOL_NAME,
