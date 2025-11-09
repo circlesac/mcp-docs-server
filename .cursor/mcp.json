@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "circlesac-mcp-docs-server-local": {
+      "command": "bun",
+      "args": ["/Users/ygpark80/Projects/mcp-docs-server/src/cli.ts", "serve"],
+      "enabled": false
+    }
+  }
+}

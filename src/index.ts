@@ -20,7 +20,7 @@ async function createServer(options: RunServerOptions = {}): Promise<MCPServer> 
 	const pkgJson = JSON.parse(await fs.readFile(fromPackageRoot("package.json"), "utf-8")) as { version?: string }
 	const version = pkgJson.version ?? "0.0.0"
 
-	const docsTool = createDocsTool()
+	const docsTool = await createDocsTool()
 
 	const server = new MCPServer({
 		name: config.name,
