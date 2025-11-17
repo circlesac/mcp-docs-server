@@ -57,6 +57,38 @@ Or use relative paths from your project root:
 }
 ```
 
+## Configure using source code
+
+To configure `mcp-docs-server` using the source code directly, clone the repository and configure your MCP server settings:
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/circlesac/mcp-docs-server.git
+   cd mcp-docs-server
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   bun install
+   ```
+
+3. Configure your MCP server settings to use the source code:
+
+   ```json
+   {
+     "mcpServers": {
+       "acme-docs": {
+         "command": "bun",
+         "args": ["run", "/path/to/mcp-docs-server/src/cli.ts", "serve", "--config", "/path/to/mcp-docs-server.json", "--docs", "/path/to/docs"]
+       }
+     }
+   }
+   ```
+
+   Replace `/path/to/mcp-docs-server` with the actual path to your cloned repository.
+
 ## Publish
 
 Use `publish` to package everything into an npm module. Pass `--output <dir>` to override the output path (acts like a dry-run that writes the package to `<dir>` without publishing).
