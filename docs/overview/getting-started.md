@@ -123,8 +123,8 @@ The markdown example below is recommended over the static badges, and automatica
 ```markdown
 <a href="https://cursor.com/en-US/install-mcp?name=acme-docs&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhY21lL21jcC1kb2NzLXNlcnZlciJdfQ%3D%3D">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/deeplink/mcp-install-dark.svg">
-    <img src="https://cursor.com/deeplink/mcp-install-light.svg" alt="Add to Cursor">
+    <source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/deeplink/mcp-install-light.svg">
+    <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor">
   </picture>
 </a>
 ```

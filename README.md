@@ -11,12 +11,25 @@ Make your Markdown docs feel alive in coding agents like Cursor and Claude. When
 If you're using Cursor, click "Add to Cursor" below to add the `mcp-docs-server` documentation with one click.
 
 <!-- Primary CTA: Add to Cursor -->
-<a href="https://cursor.com/en-US/install-mcp?name=circlesac-docs&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBjaXJjbGVzYWMvbWNwLWRvY3Mtc2VydmVyIl19">
+<a href="https://cursor.com/en-US/install-mcp?name=mcp-docs-server&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBjaXJjbGVzYWMvbWNwLWRvY3Mtc2VydmVyIl19">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/deeplink/mcp-install-dark.svg">
-    <img src="https://cursor.com/deeplink/mcp-install-light.svg" alt="Add to Cursor">
+    <source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/deeplink/mcp-install-light.svg" />
+    <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor" />
   </picture>
 </a>
+
+Or add this configuration to your MCP server settings:
+
+```json
+{
+  "mcpServers": {
+    "mcp-docs-server": {
+      "command": "npx",
+      "args": ["-y", "@circlesac/mcp-docs-server"]
+    }
+  }
+}
+```
 
 ## Get started
 
