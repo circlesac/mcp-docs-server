@@ -2,13 +2,19 @@ import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 
-import { clearConfigCache, getConfig, loadConfig } from "./config.js"
-import { fromPackageRoot, sanitizePackageDirName } from "./utils.js"
+import { clearConfigCache, getConfig, loadConfig } from "../config.js"
+import { fromPackageRoot, getPackageRoot, sanitizePackageDirName } from "../utils.js"
 
 const SCRIPT_BASENAME = "stdio.js"
 
+export interface PublishOptions {
+	configPath?: string
+	cwd?: string
+	outputDir?: string
+}
+
 async function readPackageVersion(): Promise<string> {
-	const json = JSON.parse(await fs.readFile(fromPackageRoot("package.json"), "utf-8")) as { version?: string }
+	const json = JSON.parse(await fs.readFile(fromPackageRoot(getPackageRoot(), "package.json"), "utf-8")) as { version?: string }
 	return json.version ?? "0.0.0"
 }
 
@@ -67,22 +73,22 @@ await runServer({ configPath })
 	await fs.writeFile(scriptPath, contents, { mode: 0o755 })
 }
 
-async function publishWithNpm(packageDir: string): Promise<void> {
-	await new Promise<void>((resolve, reject) => {
-		const child = spawn("npm", ["publish", "--access", "restricted"], {
-			cwd: packageDir,
-			stdio: "inherit"
-		})
+async function copyConfigFile(destination: string): Promise<void> {
+	const config = getConfig()
+	await fs.copyFile(config.configPath, path.join(destination, path.basename(config.configPath)))
+}
 
-		child.on("error", reject)
-		child.on("close", (code) => {
-			if (code === 0) {
-				resolve()
-			} else {
-				reject(new Error(`npm publish exited with code ${code}`))
-			}
-		})
-	})
+async function copyNpmrcIfPresent(destination: string): Promise<void> {
+	const config = getConfig()
+	const source = path.join(config.rootDir, ".npmrc")
+	try {
+		const stat = await fs.stat(source)
+		if (stat.isFile()) {
+			await fs.copyFile(source, path.join(destination, ".npmrc"))
+		}
+	} catch {
+		// ignore missing .npmrc
+	}
 }
 
 async function preparePackageDirectory(outputDir?: string): Promise<string> {
@@ -102,31 +108,26 @@ async function preparePackageDirectory(outputDir?: string): Promise<string> {
 	return packageDir
 }
 
-async function copyConfigFile(destination: string): Promise<void> {
-	const config = getConfig()
-	await fs.copyFile(config.configPath, path.join(destination, path.basename(config.configPath)))
+async function publishWithNpm(packageDir: string): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn("npm", ["publish", "--access", "restricted"], {
+			cwd: packageDir,
+			stdio: "inherit"
+		})
+
+		child.on("error", reject)
+		child.on("close", (code) => {
+			if (code === 0) {
+				resolve()
+			} else {
+				reject(new Error(`npm publish exited with code ${code}`))
+			}
+		})
+	})
 }
 
-async function copyNpmrcIfPresent(destination: string): Promise<void> {
-	const config = getConfig()
-	const source = path.join(config.rootDir, ".npmrc")
-	try {
-		const stat = await fs.stat(source)
-		if (stat.isFile()) {
-			await fs.copyFile(source, path.join(destination, ".npmrc"))
-		}
-	} catch (_err) {
-		// ignore missing .npmrc
-	}
-}
-
-export interface PublishOptions {
-	configPath?: string
-	cwd?: string
-	outputDir?: string
-}
-
-export async function publishDocs(options: PublishOptions = {}): Promise<string | void> {
+// Export publishDocs for backward compatibility (used by tests and bin script)
+export async function publishDocs(options: PublishOptions = {}): Promise<void> {
 	await loadConfig(options)
 	const runtimeVersion = await readPackageVersion()
 	const packageDir = await preparePackageDirectory(options.outputDir)
@@ -145,14 +146,17 @@ export async function publishDocs(options: PublishOptions = {}): Promise<string 
 		if (options.outputDir) {
 			// If outputDir was explicitly provided, just report the location (staging mode)
 			console.info(`Staged package at ${packageDir}`)
-			return packageDir
+		} else {
+			// Default behavior: publish to npm
+			console.info(`Publishing ${getConfig().packageName}@${getConfig().version}...`)
+			await publishWithNpm(packageDir)
+			console.info("Publish complete")
 		}
-
-		// Default behavior: publish to npm
-		console.info(`Publishing ${getConfig().packageName}@${getConfig().version}...`)
-		await publishWithNpm(packageDir)
-		console.info("Publish complete")
 	} finally {
 		clearConfigCache()
 	}
+}
+
+export async function handlePublish(options: PublishOptions = {}): Promise<void> {
+	await publishDocs(options)
 }

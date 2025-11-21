@@ -1,9 +1,10 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 
-import type { DocRoot } from "../config.js"
-import { getConfig } from "../config.js"
+import type { DocRoot, DocsServerConfig } from "../config.js"
 import { logger } from "../logger.js"
 import { getMatchingPaths, normalizeDocPath } from "../utils.js"
 
@@ -25,8 +26,6 @@ const docsParametersSchema = z.object({
 		)
 })
 
-type DocsInput = z.infer<typeof docsParametersSchema>
-
 interface TopLevelEntries {
 	directories: string[]
 	referenceSubdirectories: string[]
@@ -37,36 +36,73 @@ function isMarkdownFile(name: string): boolean {
 	return /\.mdx?$/i.test(name)
 }
 
-async function collectTopLevelEntries(docRoot: DocRoot): Promise<TopLevelEntries> {
-	const entries = await fs.readdir(docRoot.absolutePath, { withFileTypes: true })
+interface DirMap {
+	[dirPath: string]: {
+		directories: string[]
+		files: string[]
+	}
+}
 
-	const directoryNames: string[] = []
-	const fileNames: string[] = []
+let cachedReaddirMap: DirMap | null = null
 
-	for (const entry of entries) {
-		if (entry.isDirectory()) {
-			directoryNames.push(entry.name)
-		} else if (entry.isFile() && isMarkdownFile(entry.name)) {
-			fileNames.push(entry.name)
-		}
+async function loadReaddirMap(rootDir: string): Promise<DirMap> {
+	if (cachedReaddirMap) {
+		return cachedReaddirMap
 	}
 
-	directoryNames.sort((a, b) => a.localeCompare(b))
-	fileNames.sort((a, b) => a.localeCompare(b))
+	const readdirMapPath = path.join(rootDir, "readdir.json")
+	try {
+		const content = await fs.readFile(readdirMapPath, "utf-8")
+		cachedReaddirMap = JSON.parse(content) as DirMap
+		return cachedReaddirMap
+	} catch {
+		return {}
+	}
+}
+
+async function collectTopLevelEntries(docRoot: DocRoot, config: DocsServerConfig): Promise<TopLevelEntries> {
+	let directoryNames: string[] = []
+	let fileNames: string[] = []
+
+	if (config.useReaddirMap) {
+		const dirMap = await loadReaddirMap(config.rootDir)
+		const mapKey = docRoot.relativePath
+		const entries = dirMap[mapKey]
+		if (entries) {
+			directoryNames = [...entries.directories]
+			fileNames = [...entries.files]
+		}
+	} else {
+		const entries = await fs.readdir(docRoot.absolutePath, { withFileTypes: true })
+
+		for (const entry of entries) {
+			if (entry.isDirectory()) {
+				directoryNames.push(entry.name)
+			} else if (entry.isFile() && isMarkdownFile(entry.name)) {
+				fileNames.push(entry.name)
+			}
+		}
+
+		directoryNames.sort((a, b) => a.localeCompare(b))
+		fileNames.sort((a, b) => a.localeCompare(b))
+	}
 
 	let referenceSubdirectories: string[] = []
 	if (directoryNames.includes("reference")) {
-		try {
+		if (config.useReaddirMap) {
+			const dirMap = await loadReaddirMap(config.rootDir)
+			const referenceKey = path.join(docRoot.relativePath, "reference")
+			const referenceEntries = dirMap[referenceKey]
+			if (referenceEntries) {
+				referenceSubdirectories = referenceEntries.directories.map((name) => `reference/${name}/`).sort((a, b) => a.localeCompare(b))
+			}
+		} else {
 			const referenceEntries = await fs.readdir(path.join(docRoot.absolutePath, "reference"), { withFileTypes: true })
 			const refs = referenceEntries
 				.filter((entry) => entry.isDirectory())
 				.map((entry) => `reference/${entry.name}/`)
 				.sort((a, b) => a.localeCompare(b))
 			referenceSubdirectories = refs
-		} catch (error) {
-			await logger.warning("Failed to read reference subdirectories", {
-				error: error instanceof Error ? error.message : String(error)
-			})
 		}
 	}
 
@@ -80,8 +116,8 @@ async function collectTopLevelEntries(docRoot: DocRoot): Promise<TopLevelEntries
 	}
 }
 
-async function buildPathsDescription(docRoot: DocRoot): Promise<string> {
-	const { directories, referenceSubdirectories, files } = await collectTopLevelEntries(docRoot)
+async function buildPathsDescription(docRoot: DocRoot, config: DocsServerConfig): Promise<string> {
+	const { directories, referenceSubdirectories, files } = await collectTopLevelEntries(docRoot, config)
 	const lines: string[] = ["One or more documentation paths to fetch", "Available paths:", "Available top-level paths:"]
 
 	if (directories.length > 0) {
@@ -121,19 +157,39 @@ function buildDisplayPath(relativePath: string, entry: string, rootPrefix: strin
 	return isDirectory ? `${composed}/` : composed
 }
 
-async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath): Promise<{ dirs: string[]; files: string[]; rawFiles: string[] }> {
-	const entries = await fs.readdir(resolved.absolutePath, { withFileTypes: true })
+async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath, config: DocsServerConfig): Promise<{ dirs: string[]; files: string[]; rawFiles: string[] }> {
 	const dirEntries: string[] = []
 	const fileEntries: Array<{ display: string; name: string }> = []
 
-	for (const entry of entries) {
-		if (entry.isDirectory()) {
-			dirEntries.push(buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, true))
-		} else if (entry.isFile() && entry.name.endsWith(".md")) {
-			fileEntries.push({
-				display: buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, false),
-				name: entry.name
-			})
+	if (config.useReaddirMap) {
+		const dirMap = await loadReaddirMap(config.rootDir)
+		const mapKey = resolved.relativePath === "." ? config.docRoot.relativePath : resolved.relativePath
+		const entries = dirMap[mapKey]
+		if (entries) {
+			for (const dirName of entries.directories) {
+				dirEntries.push(buildDisplayPath(resolved.relativePath, dirName, rootPrefix, true))
+			}
+			for (const fileName of entries.files) {
+				if (fileName.endsWith(".md")) {
+					fileEntries.push({
+						display: buildDisplayPath(resolved.relativePath, fileName, rootPrefix, false),
+						name: fileName
+					})
+				}
+			}
+		}
+	} else {
+		const entries = await fs.readdir(resolved.absolutePath, { withFileTypes: true })
+
+		for (const entry of entries) {
+			if (entry.isDirectory()) {
+				dirEntries.push(buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, true))
+			} else if (entry.isFile() && entry.name.endsWith(".md")) {
+				fileEntries.push({
+					display: buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, false),
+					name: entry.name
+				})
+			}
 		}
 	}
 
@@ -147,8 +203,7 @@ async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath): P
 	}
 }
 
-async function resolveDocPath(docPath: string): Promise<{ isSecurityViolation: boolean; resolved: ResolvedDocPath | null; rootPrefix: string }> {
-	const config = getConfig()
+async function resolveDocPath(docPath: string, config: DocsServerConfig): Promise<{ isSecurityViolation: boolean; resolved: ResolvedDocPath | null; rootPrefix: string }> {
 	const normalized = normalizeDocPath(docPath)
 
 	if (hasTraversal(normalized)) {
@@ -196,9 +251,8 @@ async function resolveDocPath(docPath: string): Promise<{ isSecurityViolation: b
 	return { isSecurityViolation: false, resolved: null, rootPrefix }
 }
 
-async function readMdContent(docPath: string, queryKeywords: string[]): Promise<ReadMdResult> {
-	const config = getConfig()
-	const { isSecurityViolation, resolved, rootPrefix } = await resolveDocPath(docPath)
+async function readMdContent(docPath: string, queryKeywords: string[], config: DocsServerConfig): Promise<ReadMdResult> {
+	const { isSecurityViolation, resolved, rootPrefix } = await resolveDocPath(docPath, config)
 
 	if (isSecurityViolation) {
 		await logger.error("Path traversal attempt detected", { docPath })
@@ -213,7 +267,7 @@ async function readMdContent(docPath: string, queryKeywords: string[]): Promise<
 		const stats = await fs.stat(resolved.absolutePath)
 
 		if (stats.isDirectory()) {
-			const { dirs, files, rawFiles } = await listDirContents(rootPrefix, resolved)
+			const { dirs, files, rawFiles } = await listDirContents(rootPrefix, resolved, config)
 			const header = [
 				`Directory contents of ${docPath}:`,
 				"",
@@ -238,7 +292,8 @@ async function readMdContent(docPath: string, queryKeywords: string[]): Promise<
 				fileContents += `\n\n# ${displayPath}\n\n${content}`
 			}
 
-			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath])
+			const dirMap = config.useReaddirMap ? await loadReaddirMap(config.rootDir) : undefined
+			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath], dirMap)
 			const suggestionBlock = suggestions ? ["", "---", "", suggestions].join("\n") : ""
 
 			return { found: true, content: header + fileContents + suggestionBlock, isSecurityViolation: false }
@@ -252,10 +307,9 @@ async function readMdContent(docPath: string, queryKeywords: string[]): Promise<
 	}
 }
 
-async function buildAvailablePaths(): Promise<string> {
-	const { docRoot } = getConfig()
-	const { directories, referenceSubdirectories, files } = await collectTopLevelEntries(docRoot)
-	const rootLabel = docRoot.relativePath === "." ? "documentation root" : docRoot.relativePath
+async function buildAvailablePaths(config: DocsServerConfig): Promise<string> {
+	const { directories, referenceSubdirectories, files } = await collectTopLevelEntries(config.docRoot, config)
+	const rootLabel = config.docRoot.relativePath === "." ? "documentation root" : config.docRoot.relativePath
 	const lines: string[] = [`Available top-level paths under "${rootLabel}":`, ""]
 
 	lines.push("Directories:")
@@ -279,58 +333,71 @@ async function buildAvailablePaths(): Promise<string> {
 	return lines.join("\n").trim()
 }
 
-export async function createDocsTool() {
-	const config = getConfig()
-	const pathsDescription = await buildPathsDescription(config.docRoot)
+export async function createDocsTool(config: DocsServerConfig) {
+	const pathsDescription = await buildPathsDescription(config.docRoot, config)
 	const docsParameters = docsParametersSchema.extend({
 		paths: pathsSchema.describe(pathsDescription)
 	})
 	const toolName = config.tool
 
+	// Return structure that matches SDK's registerTool signature
+	const inputSchema = docsParameters.shape
+
+	const callback: ToolCallback<typeof inputSchema> = async (args, _extra) => {
+		void logger.debug(`Executing ${toolName} tool`, { args })
+		const queryKeywords = args.queryKeywords ?? []
+		const docRoot = config.docRoot.absolutePath
+		const availablePaths = await buildAvailablePaths(config)
+
+		const results = await Promise.all(
+			args.paths.map(async (docPath) => {
+				try {
+					const result = await readMdContent(docPath, queryKeywords, config)
+					if (result.found) {
+						return { path: docPath, content: result.content, error: null }
+					}
+					if (result.isSecurityViolation) {
+						return { path: docPath, content: null, error: "Invalid path" }
+					}
+					const dirMap = config.useReaddirMap ? await loadReaddirMap(config.rootDir) : undefined
+					const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot], dirMap)
+					const errorMessage = [`Path "${docPath}" not found.`, availablePaths, suggestions].filter(Boolean).join("\n\n")
+					return { path: docPath, content: null, error: errorMessage }
+				} catch (error) {
+					await logger.warning(`Failed to read content for path: ${docPath}`, error)
+					return {
+						path: docPath,
+						content: null,
+						error: error instanceof Error ? error.message : "Unknown error"
+					}
+				}
+			})
+		)
+
+		const output = results
+			.map((result) => {
+				if (result.error) {
+					return `## ${result.path}\n\n${result.error}\n\n---\n`
+				}
+				return `## ${result.path}\n\n${result.content}\n\n---\n`
+			})
+			.join("\n")
+
+		// Return CallToolResult format
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: output
+				}
+			]
+		} satisfies CallToolResult
+	}
+
 	return {
 		name: toolName,
 		description: config.description,
-		parameters: docsParameters,
-		execute: async (args: DocsInput) => {
-			void logger.debug(`Executing ${toolName} tool`, { args })
-			const queryKeywords = args.queryKeywords ?? []
-			const docRoot = config.docRoot.absolutePath
-			const availablePaths = await buildAvailablePaths()
-
-			const results = await Promise.all(
-				args.paths.map(async (docPath) => {
-					try {
-						const result = await readMdContent(docPath, queryKeywords)
-						if (result.found) {
-							return { path: docPath, content: result.content, error: null }
-						}
-						if (result.isSecurityViolation) {
-							return { path: docPath, content: null, error: "Invalid path" }
-						}
-						const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot])
-						const errorMessage = [`Path "${docPath}" not found.`, availablePaths, suggestions].filter(Boolean).join("\n\n")
-						return { path: docPath, content: null, error: errorMessage }
-					} catch (error) {
-						await logger.warning(`Failed to read content for path: ${docPath}`, error)
-						return {
-							path: docPath,
-							content: null,
-							error: error instanceof Error ? error.message : "Unknown error"
-						}
-					}
-				})
-			)
-
-			const output = results
-				.map((result) => {
-					if (result.error) {
-						return `## ${result.path}\n\n${result.error}\n\n---\n`
-					}
-					return `## ${result.path}\n\n${result.content}\n\n---\n`
-				})
-				.join("\n")
-
-			return output
-		}
+		inputSchema,
+		callback
 	}
 }

@@ -2,12 +2,19 @@ import fs from "node:fs/promises"
 import path, { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-
 const mdFileCache = new Map<string, string[]>()
 
-export function fromPackageRoot(...segments: string[]): string {
-	return path.resolve(__dirname, "..", ...segments)
+export function getPackageRoot(): string {
+	if (typeof import.meta.url !== "undefined") {
+		const __dirname = dirname(fileURLToPath(import.meta.url))
+		// Go up from src/utils.ts to package root
+		return dirname(__dirname)
+	}
+	return process.cwd()
+}
+
+export function fromPackageRoot(baseDir: string, ...segments: string[]): string {
+	return path.resolve(baseDir, ...segments)
 }
 
 export function sanitizePackageDirName(packageName: string): string {
@@ -15,7 +22,7 @@ export function sanitizePackageDirName(packageName: string): string {
 	return sanitized || "docs"
 }
 
-export async function* walkMdFiles(dir: string): AsyncGenerator<string> {
+export async function* walkMdFiles(dir: string, readdirMap?: { [dirPath: string]: { directories: string[]; files: string[] } }): AsyncGenerator<string> {
 	if (mdFileCache.has(dir)) {
 		for (const file of mdFileCache.get(dir)!) {
 			yield file
@@ -24,18 +31,44 @@ export async function* walkMdFiles(dir: string): AsyncGenerator<string> {
 	}
 
 	const filesInDir: string[] = []
-	const entries = await fs.readdir(dir, { withFileTypes: true })
 
-	for (const entry of entries) {
-		const fullPath = path.join(dir, entry.name)
-		if (entry.isDirectory()) {
-			for await (const file of walkMdFiles(fullPath)) {
-				filesInDir.push(file)
-				yield file
+	if (readdirMap) {
+		// Use readdir map for VFS mode
+		// Convert absolute path like "/bundle/docs" to relative key like "docs"
+		let mapKey = dir.replace(/^\/bundle\//, "").replace(/^\/bundle$/, "")
+		if (!mapKey) mapKey = "."
+		const entries = readdirMap[mapKey]
+		if (entries) {
+			for (const fileName of entries.files) {
+				if (fileName.endsWith(".md")) {
+					const fullPath = path.join(dir, fileName)
+					filesInDir.push(fullPath)
+					yield fullPath
+				}
 			}
-		} else if (entry.isFile() && entry.name.endsWith(".md")) {
-			filesInDir.push(fullPath)
-			yield fullPath
+			for (const dirName of entries.directories) {
+				const fullPath = path.join(dir, dirName)
+				for await (const file of walkMdFiles(fullPath, readdirMap)) {
+					filesInDir.push(file)
+					yield file
+				}
+			}
+		}
+	} else {
+		// Use fs.readdir for Node.js mode
+		const entries = await fs.readdir(dir, { withFileTypes: true })
+
+		for (const entry of entries) {
+			const fullPath = path.join(dir, entry.name)
+			if (entry.isDirectory()) {
+				for await (const file of walkMdFiles(fullPath, readdirMap)) {
+					filesInDir.push(file)
+					yield file
+				}
+			} else if (entry.isFile() && entry.name.endsWith(".md")) {
+				filesInDir.push(fullPath)
+				yield fullPath
+			}
 		}
 	}
 
@@ -100,14 +133,18 @@ function calculateFinalScore(score: FileScore, totalKeywords: number): number {
 	return score.totalMatches * 1 + score.titleMatches * 3 + score.pathRelevance * 2 + score.keywordMatches.size * 5 + allKeywordsBonus
 }
 
-export async function searchDocumentContent(keywords: string[], baseDir: string): Promise<string[]> {
+export async function searchDocumentContent(
+	keywords: string[],
+	baseDir: string,
+	readdirMap?: { [dirPath: string]: { directories: string[]; files: string[] } }
+): Promise<string[]> {
 	if (keywords.length === 0) {
 		return []
 	}
 
 	const fileScores = new Map<string, FileScore>()
 
-	for await (const filePath of walkMdFiles(baseDir)) {
+	for await (const filePath of walkMdFiles(baseDir, readdirMap)) {
 		let content: string
 		try {
 			content = await fs.readFile(filePath, "utf-8")
@@ -169,7 +206,12 @@ export function normalizeDocPath(docPath: string): string {
 	return normalized
 }
 
-export async function getMatchingPaths(pathInput: string, queryKeywords: string[] | undefined, baseDirs: string[]): Promise<string> {
+export async function getMatchingPaths(
+	pathInput: string,
+	queryKeywords: string[] | undefined,
+	baseDirs: string[],
+	readdirMap?: { [dirPath: string]: { directories: string[]; files: string[] } }
+): Promise<string> {
 	const pathKeywords = extractKeywordsFromPath(pathInput)
 	const allKeywords = normalizeKeywords([...pathKeywords, ...(queryKeywords ?? [])])
 
@@ -179,7 +221,7 @@ export async function getMatchingPaths(pathInput: string, queryKeywords: string[
 
 	const suggestedPaths = new Set<string>()
 	for (const base of baseDirs) {
-		const result = await searchDocumentContent(allKeywords, base)
+		const result = await searchDocumentContent(allKeywords, base, readdirMap)
 		for (const entry of result) {
 			suggestedPaths.add(entry)
 		}

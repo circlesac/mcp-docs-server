@@ -2,11 +2,9 @@ import type { ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import type { SpyInstance } from "vitest"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest"
+import { publishDocs } from "../src/commands/publish.js"
 import { clearConfigCache } from "../src/config.js"
-import { publishDocs } from "../src/publish.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
@@ -33,8 +31,8 @@ vi.mock("node:child_process", () => ({
 }))
 
 describe("publishDocs", () => {
-	let writeFileSpy: SpyInstance
-	let consoleSpy: SpyInstance
+	let writeFileSpy: MockInstance
+	let consoleSpy: MockInstance
 
 	beforeEach(() => {
 		clearConfigCache()
@@ -56,7 +54,10 @@ describe("publishDocs", () => {
 		expect(spawnMock.mock.calls[0]?.[0]).toBe("npm")
 		expect(spawnMock.mock.calls[0]?.[1]).toEqual(["publish", "--access", "restricted"])
 
-		const packageJsonWrite = writeFileSpy.mock.calls.find(([filePath]) => filePath.endsWith("package.json"))
+		const packageJsonWrite = writeFileSpy.mock.calls.find((call) => {
+			const [filePath] = call as [string, unknown]
+			return filePath.endsWith("package.json")
+		})
 		expect(packageJsonWrite).toBeDefined()
 		const generatedPackageJson = JSON.parse(packageJsonWrite?.[1]?.toString() ?? "{}") as {
 			name?: string
@@ -70,7 +71,10 @@ describe("publishDocs", () => {
 		expect(generatedPackageJson.dependencies?.["@circlesac/mcp-docs-server"]).toBeDefined()
 		expect(generatedPackageJson.bin).toBe("bin/stdio.js")
 
-		const binWrite = writeFileSpy.mock.calls.find(([filePath]) => filePath.includes(path.join("bin", "stdio.js")))
+		const binWrite = writeFileSpy.mock.calls.find((call) => {
+			const [filePath] = call as [string, unknown]
+			return filePath.includes(path.join("bin", "stdio.js"))
+		})
 		expect(binWrite).toBeDefined()
 		expect(binWrite?.[1]?.toString()).toContain("runServer")
 	})

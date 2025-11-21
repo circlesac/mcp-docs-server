@@ -1,0 +1,14 @@
+{
+  "docs/workflows": {
+    "directories": [],
+    "files": ["publish.md"]
+  },
+  "docs/overview": {
+    "directories": [],
+    "files": ["configuration.md", "getting-started.md"]
+  },
+  "docs": {
+    "directories": ["overview", "workflows"],
+    "files": ["index.md"]
+  }
+}

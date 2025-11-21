@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
-import { buildCloudflare } from "./build/cloudflare.js"
-import { runServer } from "./index.js"
+import { dirname } from "node:path"
+import { fileURLToPath } from "node:url"
+
+import { handleCloudflare } from "./commands/cloudflare.js"
+import { handlePublish } from "./commands/publish.js"
+import { runServer } from "./commands/serve.js"
 import { logger } from "./logger.js"
-import { publishDocs } from "./publish.js"
 import { fromPackageRoot } from "./utils.js"
 
-const PACKAGE_CONFIG_PATH = fromPackageRoot("mcp-docs-server.json")
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const PACKAGE_ROOT = dirname(__dirname)
+const PACKAGE_CONFIG_PATH = fromPackageRoot(PACKAGE_ROOT, "mcp-docs-server.json")
 
 async function printUsage(): Promise<void> {
 	await logger.info(`Usage: npx @circlesac/mcp-docs-server [command]
@@ -107,12 +112,12 @@ async function main() {
 			}
 			case "publish": {
 				const options = parsePublishArgs(args.slice(1))
-				await publishDocs({ outputDir: options.outputDir })
+				await handlePublish(options)
 				break
 			}
 			case "cloudflare": {
 				const options = parseCloudflareArgs(args.slice(1))
-				await buildCloudflare({ outputDir: options.outputDir })
+				await handleCloudflare(options)
 				break
 			}
 			case "help":

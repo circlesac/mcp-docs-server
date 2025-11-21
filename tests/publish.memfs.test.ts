@@ -39,7 +39,8 @@ describe("publishDocs with in-memory filesystem", () => {
 
 		const ensureDir: FsPromises["mkdir"] = async (dirPath, options) => {
 			try {
-				await basePromises.mkdir(dirPath, { recursive: true, ...options })
+				const opts = options && typeof options === "object" ? { recursive: true, ...options } : { recursive: true }
+				await basePromises.mkdir(dirPath as string, opts)
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
 					throw error
@@ -48,31 +49,50 @@ describe("publishDocs with in-memory filesystem", () => {
 		}
 
 		const cp: FsPromises["cp"] = async (src, dest, _options) => {
-			const stats = await basePromises.stat(src)
+			const srcPath = typeof src === "string" ? src : src.toString()
+			const destPath = typeof dest === "string" ? dest : dest.toString()
+			const stats = await basePromises.stat(srcPath)
 			if (stats.isDirectory()) {
-				await ensureDir(dest)
-				const entries = await basePromises.readdir(src)
+				await ensureDir(destPath)
+				const entries = await basePromises.readdir(srcPath, { withFileTypes: true })
 				for (const entry of entries) {
-					await cp(path.join(src, entry), path.join(dest, entry))
+					let entryName: string
+					if (typeof entry === "string") {
+						entryName = entry
+					} else if ("name" in entry && typeof entry.name === "string") {
+						entryName = entry.name
+					} else {
+						entryName = String(entry)
+					}
+					await cp(path.join(srcPath, entryName), path.join(destPath, entryName))
 				}
 			} else {
-				const data = await basePromises.readFile(src)
-				await ensureDir(path.dirname(dest))
-				await basePromises.writeFile(dest, data)
+				const data = await basePromises.readFile(srcPath)
+				await ensureDir(path.dirname(destPath))
+				await basePromises.writeFile(destPath, data)
 			}
 		}
 
 		const rm: FsPromises["rm"] = async (target, options) => {
+			const targetPath = typeof target === "string" ? target : target.toString()
 			try {
-				const stats = await basePromises.stat(target)
+				const stats = await basePromises.stat(targetPath)
 				if (stats.isDirectory()) {
-					const entries = await basePromises.readdir(target)
+					const entries = await basePromises.readdir(targetPath, { withFileTypes: true })
 					for (const entry of entries) {
-						await rm(path.join(target, entry), options)
+						let entryName: string
+						if (typeof entry === "string") {
+							entryName = entry
+						} else if ("name" in entry && typeof entry.name === "string") {
+							entryName = entry.name
+						} else {
+							entryName = String(entry)
+						}
+						await rm(path.join(targetPath, entryName), options)
 					}
-					await basePromises.rmdir(target)
+					await basePromises.rmdir(targetPath)
 				} else {
-					await basePromises.unlink(target)
+					await basePromises.unlink(targetPath)
 				}
 			} catch (error) {
 				if (!(options?.force && (error as NodeJS.ErrnoException).code === "ENOENT")) {
@@ -81,13 +101,15 @@ describe("publishDocs with in-memory filesystem", () => {
 			}
 		}
 
-		const mkdtemp: FsPromises["mkdtemp"] = async (prefix) => {
+		const mkdtemp: FsPromises["mkdtemp"] = async (prefix, _options) => {
 			const unique = `${prefix}${Math.random().toString(16).slice(2)}`
 			await ensureDir(unique)
-			return unique
+			// Type assertion needed because memfs mkdtemp returns string but FsPromises expects Buffer in some overloads
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			return unique as any
 		}
 
-		const promises = Object.assign({}, basePromises, { cp, rm, mkdtemp, mkdir: ensureDir }) as FsPromises
+		const promises = Object.assign({}, basePromises, { cp, rm, mkdtemp, mkdir: ensureDir }) as unknown as FsPromises
 
 		const spawnMock = vi.fn(() => ({
 			on: (event: string, handler: (...listenerArgs: unknown[]) => void) => {
@@ -100,7 +122,7 @@ describe("publishDocs with in-memory filesystem", () => {
 		vi.doMock("node:fs/promises", () => ({ default: promises, ...promises }))
 		vi.doMock("node:child_process", () => ({ spawn: spawnMock }))
 
-		const { publishDocs } = await import("../src/publish.js")
+		const { publishDocs } = await import("../src/commands/publish.js")
 
 		await publishDocs({ configPath: "/acme/mcp-docs-server.json", outputDir: "/acme-output" })
 
