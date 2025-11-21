@@ -29,7 +29,6 @@ export interface DocsServerConfig {
 	docRoot: DocRoot
 	configPath: string
 	rootDir: string
-	useReaddirMap: boolean
 	raw: z.infer<typeof configSchema>
 }
 
@@ -195,7 +194,6 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 		docRoot,
 		configPath,
 		rootDir,
-		useReaddirMap: isVFS ?? false,
 		raw: rawConfig
 	}
 

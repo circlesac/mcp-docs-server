@@ -36,74 +36,31 @@ function isMarkdownFile(name: string): boolean {
 	return /\.mdx?$/i.test(name)
 }
 
-interface DirMap {
-	[dirPath: string]: {
-		directories: string[]
-		files: string[]
-	}
-}
+async function collectTopLevelEntries(docRoot: DocRoot, _config: DocsServerConfig): Promise<TopLevelEntries> {
+	const directoryNames: string[] = []
+	const fileNames: string[] = []
 
-let cachedReaddirMap: DirMap | null = null
+	const entries = await fs.readdir(docRoot.absolutePath, { withFileTypes: true })
 
-async function loadReaddirMap(rootDir: string): Promise<DirMap> {
-	if (cachedReaddirMap) {
-		return cachedReaddirMap
-	}
-
-	const readdirMapPath = path.join(rootDir, "readdir.json")
-	try {
-		const content = await fs.readFile(readdirMapPath, "utf-8")
-		cachedReaddirMap = JSON.parse(content) as DirMap
-		return cachedReaddirMap
-	} catch {
-		return {}
-	}
-}
-
-async function collectTopLevelEntries(docRoot: DocRoot, config: DocsServerConfig): Promise<TopLevelEntries> {
-	let directoryNames: string[] = []
-	let fileNames: string[] = []
-
-	if (config.useReaddirMap) {
-		const dirMap = await loadReaddirMap(config.rootDir)
-		const mapKey = docRoot.relativePath
-		const entries = dirMap[mapKey]
-		if (entries) {
-			directoryNames = [...entries.directories]
-			fileNames = [...entries.files]
+	for (const entry of entries) {
+		if (entry.isDirectory()) {
+			directoryNames.push(entry.name)
+		} else if (entry.isFile() && isMarkdownFile(entry.name)) {
+			fileNames.push(entry.name)
 		}
-	} else {
-		const entries = await fs.readdir(docRoot.absolutePath, { withFileTypes: true })
-
-		for (const entry of entries) {
-			if (entry.isDirectory()) {
-				directoryNames.push(entry.name)
-			} else if (entry.isFile() && isMarkdownFile(entry.name)) {
-				fileNames.push(entry.name)
-			}
-		}
-
-		directoryNames.sort((a, b) => a.localeCompare(b))
-		fileNames.sort((a, b) => a.localeCompare(b))
 	}
+
+	directoryNames.sort((a, b) => a.localeCompare(b))
+	fileNames.sort((a, b) => a.localeCompare(b))
 
 	let referenceSubdirectories: string[] = []
 	if (directoryNames.includes("reference")) {
-		if (config.useReaddirMap) {
-			const dirMap = await loadReaddirMap(config.rootDir)
-			const referenceKey = path.join(docRoot.relativePath, "reference")
-			const referenceEntries = dirMap[referenceKey]
-			if (referenceEntries) {
-				referenceSubdirectories = referenceEntries.directories.map((name) => `reference/${name}/`).sort((a, b) => a.localeCompare(b))
-			}
-		} else {
-			const referenceEntries = await fs.readdir(path.join(docRoot.absolutePath, "reference"), { withFileTypes: true })
-			const refs = referenceEntries
-				.filter((entry) => entry.isDirectory())
-				.map((entry) => `reference/${entry.name}/`)
-				.sort((a, b) => a.localeCompare(b))
-			referenceSubdirectories = refs
-		}
+		const referenceEntries = await fs.readdir(path.join(docRoot.absolutePath, "reference"), { withFileTypes: true })
+		const refs = referenceEntries
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => `reference/${entry.name}/`)
+			.sort((a, b) => a.localeCompare(b))
+		referenceSubdirectories = refs
 	}
 
 	const directories = directoryNames.map((name) => `${name}/`)
@@ -157,39 +114,20 @@ function buildDisplayPath(relativePath: string, entry: string, rootPrefix: strin
 	return isDirectory ? `${composed}/` : composed
 }
 
-async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath, config: DocsServerConfig): Promise<{ dirs: string[]; files: string[]; rawFiles: string[] }> {
+async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath, _config: DocsServerConfig): Promise<{ dirs: string[]; files: string[]; rawFiles: string[] }> {
 	const dirEntries: string[] = []
 	const fileEntries: Array<{ display: string; name: string }> = []
 
-	if (config.useReaddirMap) {
-		const dirMap = await loadReaddirMap(config.rootDir)
-		const mapKey = resolved.relativePath === "." ? config.docRoot.relativePath : resolved.relativePath
-		const entries = dirMap[mapKey]
-		if (entries) {
-			for (const dirName of entries.directories) {
-				dirEntries.push(buildDisplayPath(resolved.relativePath, dirName, rootPrefix, true))
-			}
-			for (const fileName of entries.files) {
-				if (fileName.endsWith(".md")) {
-					fileEntries.push({
-						display: buildDisplayPath(resolved.relativePath, fileName, rootPrefix, false),
-						name: fileName
-					})
-				}
-			}
-		}
-	} else {
-		const entries = await fs.readdir(resolved.absolutePath, { withFileTypes: true })
+	const entries = await fs.readdir(resolved.absolutePath, { withFileTypes: true })
 
-		for (const entry of entries) {
-			if (entry.isDirectory()) {
-				dirEntries.push(buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, true))
-			} else if (entry.isFile() && entry.name.endsWith(".md")) {
-				fileEntries.push({
-					display: buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, false),
-					name: entry.name
-				})
-			}
+	for (const entry of entries) {
+		if (entry.isDirectory()) {
+			dirEntries.push(buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, true))
+		} else if (entry.isFile() && entry.name.endsWith(".md")) {
+			fileEntries.push({
+				display: buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, false),
+				name: entry.name
+			})
 		}
 	}
 
@@ -292,8 +230,7 @@ async function readMdContent(docPath: string, queryKeywords: string[], config: D
 				fileContents += `\n\n# ${displayPath}\n\n${content}`
 			}
 
-			const dirMap = config.useReaddirMap ? await loadReaddirMap(config.rootDir) : undefined
-			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath], dirMap)
+			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath], undefined)
 			const suggestionBlock = suggestions ? ["", "---", "", suggestions].join("\n") : ""
 
 			return { found: true, content: header + fileContents + suggestionBlock, isSecurityViolation: false }
@@ -359,8 +296,7 @@ export async function createDocsTool(config: DocsServerConfig) {
 					if (result.isSecurityViolation) {
 						return { path: docPath, content: null, error: "Invalid path" }
 					}
-					const dirMap = config.useReaddirMap ? await loadReaddirMap(config.rootDir) : undefined
-					const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot], dirMap)
+					const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot], undefined)
 					const errorMessage = [`Path "${docPath}" not found.`, availablePaths, suggestions].filter(Boolean).join("\n\n")
 					return { path: docPath, content: null, error: errorMessage }
 				} catch (error) {

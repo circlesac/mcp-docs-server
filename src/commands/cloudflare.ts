@@ -1,12 +1,15 @@
 import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { readPackageUp } from "read-package-up"
 
 import { clearConfigCache, getConfig, loadConfig } from "../config.js"
 import { sanitizePackageDirName } from "../utils.js"
 
 export interface CloudflareOptions {
 	outputDir?: string
+	dryRun?: boolean
+	accountId?: string
 }
 
 async function prepareBuildDirectory(outputDir?: string): Promise<string> {
@@ -31,12 +34,12 @@ async function copyDocs(buildDir: string): Promise<void> {
 }
 
 async function copySourceFiles(buildDir: string): Promise<void> {
-	// Copy all source files needed by cloudflare.ts
+	// Copy all source files needed by cloudflare.ts to src/ subdirectory
 	const filesToCopy = ["config.ts", "logger.ts", "tools/docs.ts", "utils.ts"]
 
 	for (const file of filesToCopy) {
 		const sourcePath = path.resolve(process.cwd(), "src", file)
-		const targetPath = path.join(buildDir, file)
+		const targetPath = path.join(buildDir, "src", file)
 		await fs.mkdir(path.dirname(targetPath), { recursive: true })
 		await fs.cp(sourcePath, targetPath, { force: true })
 	}
@@ -49,94 +52,84 @@ async function copyTemplates(buildDir: string): Promise<void> {
 	await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
 }
 
-interface DirMap {
-	[dirPath: string]: {
-		directories: string[]
-		files: string[]
-	}
-}
-
-async function generateReaddirMap(buildDir: string): Promise<void> {
-	const config = getConfig()
-	const docsDir = path.join(buildDir, config.docRoot.relativePath)
-	const dirMap: DirMap = {}
-
-	async function scanDirectory(dirPath: string, relativePath: string): Promise<void> {
-		const entries = await fs.readdir(dirPath, { withFileTypes: true })
-		const directories: string[] = []
-		const files: string[] = []
-
-		for (const entry of entries) {
-			if (entry.isDirectory()) {
-				directories.push(entry.name)
-				const subDirPath = path.join(dirPath, entry.name)
-				const subRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name
-				await scanDirectory(subDirPath, subRelativePath)
-			} else if (entry.isFile() && /\.mdx?$/i.test(entry.name)) {
-				files.push(entry.name)
-			}
-		}
-
-		directories.sort((a, b) => a.localeCompare(b))
-		files.sort((a, b) => a.localeCompare(b))
-
-		const mapKey = relativePath || config.docRoot.relativePath
-		dirMap[mapKey] = { directories, files }
-	}
-
-	await scanDirectory(docsDir, config.docRoot.relativePath)
-
-	const readdirMapPath = path.join(buildDir, "readdir.json")
-	await fs.writeFile(readdirMapPath, `${JSON.stringify(dirMap, null, 2)}\n`)
-}
-
 async function copyCloudflareEntrypoint(buildDir: string): Promise<void> {
 	const sourcePath = path.resolve(process.cwd(), "src", "cloudflare.ts")
-	const targetPath = path.join(buildDir, "index.ts")
+	const targetPath = path.join(buildDir, "src", "index.ts")
+	await fs.mkdir(path.dirname(targetPath), { recursive: true })
 	await fs.cp(sourcePath, targetPath, { force: true })
 }
 
-async function generateWranglerConfig(buildDir: string): Promise<void> {
+async function generatePackageJson(buildDir: string): Promise<void> {
+	// Read root package.json as template using read-package-up
+	let rootPackageJson: Record<string, unknown> = {}
+	try {
+		const result = await readPackageUp()
+		if (result?.packageJson) {
+			rootPackageJson = result.packageJson as Record<string, unknown>
+		}
+	} catch {
+		// If package.json doesn't exist, create a minimal one
+		rootPackageJson = {
+			name: "mcp-docs-server",
+			version: "0.0.0",
+			type: "module"
+		}
+	}
+
+	// Generate minimal package.json for Cloudflare Worker build
+	const buildPackageJson = {
+		name: rootPackageJson.name || "mcp-docs-server",
+		version: rootPackageJson.version || "0.0.0",
+		type: "module",
+		dependencies: rootPackageJson.dependencies || {}
+		// Remove devDependencies, scripts, and other fields not needed for build
+	}
+
+	await fs.writeFile(path.join(buildDir, "package.json"), `${JSON.stringify(buildPackageJson, null, 2)}\n`)
+}
+
+async function generateWranglerConfig(buildDir: string, accountId?: string): Promise<void> {
 	const config = getConfig()
 	const workerName = sanitizePackageDirName(config.packageName)
 
-	// Read package.json for version
-	const packageJsonPath = path.resolve(process.cwd(), "package.json")
+	// Read root wrangler.json as template
+	const rootWranglerPath = path.resolve(process.cwd(), "wrangler.json")
+	const content = await fs.readFile(rootWranglerPath, "utf-8")
+	const rootWranglerConfig = JSON.parse(content) as Record<string, unknown>
+
+	// Read package.json for version using read-package-up
 	let version = config.version
 	try {
-		const pkgJson = JSON.parse(await fs.readFile(packageJsonPath, "utf-8")) as { version?: string }
-		version = pkgJson.version ?? config.version
+		const result = await readPackageUp()
+		if (result?.packageJson?.version) {
+			version = result.packageJson.version as string
+		}
 	} catch {
 		// Fallback to config version
 	}
 
+	// Merge root config with build-specific overrides
 	const wranglerConfig = {
+		...rootWranglerConfig,
 		name: workerName,
-		main: "./index.ts",
-		compatibility_date: "2025-09-01",
-		compatibility_flags: ["nodejs_compat"],
+		main: "./src/index.ts",
+		...(accountId && { account_id: accountId }),
 		vars: {
 			MCP_DOCS_SERVER_NAME: config.name,
 			MCP_DOCS_SERVER_VERSION: version,
 			MCP_DOCS_SERVER_TOOL_NAME: config.tool,
 			MCP_DOCS_SERVER_DOCS_PATH: config.docRoot.relativePath,
 			MCP_DOCS_SERVER_PACKAGE_NAME: config.packageName
-		},
-		rules: [
-			{
-				type: "Text",
-				globs: ["**/*.md", "**/*.mdx", "readdir.json", "mcp-docs-server.json"],
-				fallthrough: true
-			}
-		]
+		}
+		// Keep rules, migrations, durable_objects, etc. from root config
 	}
 
 	await fs.writeFile(path.join(buildDir, "wrangler.json"), `${JSON.stringify(wranglerConfig, null, 2)}\n`)
 }
 
-async function runWranglerBuild(buildDir: string): Promise<void> {
+async function runNpmInstall(buildDir: string): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
-		const child = spawn("npx", ["wrangler", "build"], {
+		const child = spawn("npm", ["install"], {
 			cwd: buildDir,
 			stdio: "inherit",
 			shell: true
@@ -147,7 +140,45 @@ async function runWranglerBuild(buildDir: string): Promise<void> {
 			if (code === 0) {
 				resolve()
 			} else {
-				reject(new Error(`wrangler build exited with code ${code}`))
+				reject(new Error(`npm install exited with code ${code}`))
+			}
+		})
+	})
+}
+
+async function runWranglerTypes(buildDir: string): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn("npx", ["wrangler", "types"], {
+			cwd: buildDir,
+			stdio: "inherit",
+			shell: true
+		})
+
+		child.on("error", reject)
+		child.on("close", (code) => {
+			if (code === 0) {
+				resolve()
+			} else {
+				reject(new Error(`wrangler types exited with code ${code}`))
+			}
+		})
+	})
+}
+
+async function runWranglerDeploy(buildDir: string): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn("npx", ["wrangler", "deploy"], {
+			cwd: buildDir,
+			stdio: "inherit",
+			shell: true
+		})
+
+		child.on("error", reject)
+		child.on("close", (code) => {
+			if (code === 0) {
+				resolve()
+			} else {
+				reject(new Error(`wrangler deploy exited with code ${code}`))
 			}
 		})
 	})
@@ -157,16 +188,13 @@ export async function handleCloudflare(options: CloudflareOptions = {}): Promise
 	await loadConfig()
 	const buildDir = await prepareBuildDirectory(options.outputDir)
 
-	try {
-		// Clean up existing directory if it exists
-		await fs.rm(buildDir, { recursive: true, force: true })
-		await fs.mkdir(buildDir, { recursive: true })
+	// Always clean the target directory before building
+	await fs.rm(buildDir, { recursive: true, force: true })
+	await fs.mkdir(buildDir, { recursive: true })
 
+	try {
 		// Copy user's docs
 		await copyDocs(buildDir)
-
-		// Generate readdir.json map for VFS directory listing
-		await generateReaddirMap(buildDir)
 
 		// Copy config file for VFS access (even though we use env vars, it's useful to have it bundled)
 		const configPath = path.resolve(process.cwd(), "mcp-docs-server.json")
@@ -185,13 +213,29 @@ export async function handleCloudflare(options: CloudflareOptions = {}): Promise
 		// Copy cloudflare.ts entrypoint as index.ts
 		await copyCloudflareEntrypoint(buildDir)
 
-		// Generate wrangler.json with worker name
-		await generateWranglerConfig(buildDir)
+		// Generate package.json for the build directory
+		await generatePackageJson(buildDir)
 
-		// Run wrangler build
-		console.info("Building Cloudflare Worker...")
-		await runWranglerBuild(buildDir)
-		console.info(`Cloudflare build complete at ${buildDir}`)
+		// Generate wrangler.json with worker name
+		await generateWranglerConfig(buildDir, options.accountId)
+
+		if (options.dryRun) {
+			console.info(`Dry run complete. Build directory prepared at ${buildDir}`)
+			return
+		}
+
+		// Install dependencies
+		console.info("Installing dependencies...")
+		await runNpmInstall(buildDir)
+
+		// Generate TypeScript types
+		console.info("Generating TypeScript types...")
+		await runWranglerTypes(buildDir)
+
+		// Deploy to Cloudflare
+		console.info("Deploying Cloudflare Worker...")
+		await runWranglerDeploy(buildDir)
+		console.info(`Cloudflare deployment complete`)
 	} finally {
 		clearConfigCache()
 	}

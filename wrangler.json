@@ -2,7 +2,7 @@
   "name": "mcp-docs-server",
   "main": "./src/cloudflare.ts",
   "compatibility_date": "2025-09-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "enable_nodejs_fs_module"],
   "migrations": [
     {
       "new_sqlite_classes": ["DocsMCP"],
@@ -24,10 +24,12 @@
     "MCP_DOCS_SERVER_DOCS_PATH": "docs",
     "MCP_DOCS_SERVER_PACKAGE_NAME": "@circlesac/mcp-docs-server"
   },
+  "base_dir": ".",
+  "find_additional_modules": true,
   "rules": [
     {
       "type": "Text",
-      "globs": ["**/*.md", "**/*.mdx", "readdir.json", "mcp-docs-server.json"],
+      "globs": ["docs/**/*.md", "templates/**/*.mdx", "mcp-docs-server.json"],
       "fallthrough": true
     }
   ]

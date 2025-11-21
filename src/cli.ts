@@ -26,7 +26,9 @@ Options:
   serve --config <path>      Path to mcp-docs-server.json (default: ./mcp-docs-server.json)
   serve --docs <path>        Path to docs directory (overrides config file)
   publish --output <dir>     Stage the npm package in <dir> instead of publishing
-  cloudflare --output <dir>  Override output directory (default: .build/cloudflare/)`)
+  cloudflare --output <dir>  Override output directory (default: .build/cloudflare/)
+  cloudflare --dry-run       Prepare build directory without running build
+  cloudflare --account-id <id>  Cloudflare account ID for deployment`)
 }
 
 function parseServeArgs(args: string[]): { configPath?: string; docs?: string } {
@@ -76,8 +78,8 @@ function parsePublishArgs(args: string[]): { outputDir?: string } {
 	return options
 }
 
-function parseCloudflareArgs(args: string[]): { outputDir?: string } {
-	const options: { outputDir?: string } = {}
+function parseCloudflareArgs(args: string[]): { outputDir?: string; dryRun?: boolean; accountId?: string } {
+	const options: { outputDir?: string; dryRun?: boolean; accountId?: string } = {}
 
 	for (let i = 0; i < args.length; i += 1) {
 		const token = args[i]
@@ -88,6 +90,15 @@ function parseCloudflareArgs(args: string[]): { outputDir?: string } {
 			}
 			i += 1
 			options.outputDir = next
+		} else if (token === "--dry-run") {
+			options.dryRun = true
+		} else if (token === "--account-id") {
+			const next = args[i + 1]
+			if (!next) {
+				throw new Error("--account-id option requires an account ID")
+			}
+			i += 1
+			options.accountId = next
 		} else {
 			throw new Error(`Unknown option for cloudflare: ${token}`)
 		}

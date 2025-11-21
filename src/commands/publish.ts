@@ -132,11 +132,11 @@ export async function publishDocs(options: PublishOptions = {}): Promise<void> {
 	const runtimeVersion = await readPackageVersion()
 	const packageDir = await preparePackageDirectory(options.outputDir)
 
-	try {
-		// Clean up existing directory if it exists
-		await fs.rm(packageDir, { recursive: true, force: true })
-		await fs.mkdir(packageDir, { recursive: true })
+	// Always clean the target directory before building
+	await fs.rm(packageDir, { recursive: true, force: true })
+	await fs.mkdir(packageDir, { recursive: true })
 
+	try {
 		await copyDocRoots(packageDir)
 		await copyConfigFile(packageDir)
 		await copyNpmrcIfPresent(packageDir)

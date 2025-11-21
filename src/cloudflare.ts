@@ -29,7 +29,6 @@ export class DocsMCP extends McpAgent<Env> {
 			},
 			configPath: "/bundle/mcp-docs-server.json",
 			rootDir: "/bundle",
-			useReaddirMap: true,
 			raw: {
 				name,
 				package: packageName,
