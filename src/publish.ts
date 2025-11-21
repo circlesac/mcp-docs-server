@@ -1,16 +1,11 @@
 import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
-import os from "node:os"
 import path from "node:path"
 
 import { clearConfigCache, getConfig, loadConfig } from "./config.js"
-import { fromPackageRoot } from "./utils.js"
+import { fromPackageRoot, sanitizePackageDirName } from "./utils.js"
 
 const SCRIPT_BASENAME = "stdio.js"
-
-function sanitizePackageDirName(packageName: string): string {
-	return packageName.replace(/[^a-zA-Z0-9.-]+/g, "-") || "docs"
-}
 
 async function readPackageVersion(): Promise<string> {
 	const json = JSON.parse(await fs.readFile(fromPackageRoot("package.json"), "utf-8")) as { version?: string }
@@ -90,11 +85,19 @@ async function publishWithNpm(packageDir: string): Promise<void> {
 	})
 }
 
-async function preparePackageDirectory(): Promise<string> {
+async function preparePackageDirectory(outputDir?: string): Promise<string> {
 	const config = getConfig()
-	const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mcp-docs-"))
 	const safeDirName = sanitizePackageDirName(config.packageName)
-	const packageDir = path.join(tempRoot, safeDirName)
+
+	if (outputDir) {
+		// Use provided output directory (override)
+		const packageDir = path.resolve(outputDir)
+		await fs.mkdir(packageDir, { recursive: true })
+		return packageDir
+	}
+
+	// Default: Use .build/npm/ in CWD
+	const packageDir = path.resolve(process.cwd(), ".build", "npm", safeDirName)
 	await fs.mkdir(packageDir, { recursive: true })
 	return packageDir
 }
@@ -117,10 +120,6 @@ async function copyNpmrcIfPresent(destination: string): Promise<void> {
 	}
 }
 
-async function cleanup(directory: string): Promise<void> {
-	await fs.rm(directory, { recursive: true, force: true })
-}
-
 export interface PublishOptions {
 	configPath?: string
 	cwd?: string
@@ -130,10 +129,13 @@ export interface PublishOptions {
 export async function publishDocs(options: PublishOptions = {}): Promise<string | void> {
 	await loadConfig(options)
 	const runtimeVersion = await readPackageVersion()
-	const packageDir = await preparePackageDirectory()
-	const tempRoot = path.dirname(packageDir)
+	const packageDir = await preparePackageDirectory(options.outputDir)
 
 	try {
+		// Clean up existing directory if it exists
+		await fs.rm(packageDir, { recursive: true, force: true })
+		await fs.mkdir(packageDir, { recursive: true })
+
 		await copyDocRoots(packageDir)
 		await copyConfigFile(packageDir)
 		await copyNpmrcIfPresent(packageDir)
@@ -141,19 +143,16 @@ export async function publishDocs(options: PublishOptions = {}): Promise<string 
 		await writePackageJson(packageDir, runtimeVersion)
 
 		if (options.outputDir) {
-			const destination = path.resolve(options.outputDir)
-			await fs.rm(destination, { recursive: true, force: true })
-			await fs.mkdir(path.dirname(destination), { recursive: true })
-			await fs.cp(packageDir, destination, { recursive: true, force: true })
-			console.info(`Staged package at ${destination}`)
-			return destination
+			// If outputDir was explicitly provided, just report the location (staging mode)
+			console.info(`Staged package at ${packageDir}`)
+			return packageDir
 		}
 
+		// Default behavior: publish to npm
 		console.info(`Publishing ${getConfig().packageName}@${getConfig().version}...`)
 		await publishWithNpm(packageDir)
 		console.info("Publish complete")
 	} finally {
-		await cleanup(tempRoot)
 		clearConfigCache()
 	}
 }

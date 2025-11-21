@@ -10,6 +10,11 @@ export function fromPackageRoot(...segments: string[]): string {
 	return path.resolve(__dirname, "..", ...segments)
 }
 
+export function sanitizePackageDirName(packageName: string): string {
+	const sanitized = packageName.replace(/[^a-zA-Z0-9.-]+/g, "-").replace(/^-+|-+$/g, "")
+	return sanitized || "docs"
+}
+
 export async function* walkMdFiles(dir: string): AsyncGenerator<string> {
 	if (mdFileCache.has(dir)) {
 		for (const file of mdFileCache.get(dir)!) {

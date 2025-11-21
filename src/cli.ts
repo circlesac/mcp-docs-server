@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { buildCloudflare } from "./build/cloudflare.js"
 import { runServer } from "./index.js"
 import { logger } from "./logger.js"
 import { publishDocs } from "./publish.js"
@@ -13,12 +14,14 @@ async function printUsage(): Promise<void> {
 Commands:
   serve      Start the MCP docs server from the current directory
   publish    Package the documentation (publishes to npm by default)
+  cloudflare Build Cloudflare Worker for remote MCP server
   help       Show this message
 
 Options:
-  serve --config <path>   Path to mcp-docs-server.json (default: ./mcp-docs-server.json)
-  serve --docs <path>     Path to docs directory (overrides config file)
-  publish --output <dir>  Stage the npm package in <dir> instead of publishing`)
+  serve --config <path>      Path to mcp-docs-server.json (default: ./mcp-docs-server.json)
+  serve --docs <path>        Path to docs directory (overrides config file)
+  publish --output <dir>     Stage the npm package in <dir> instead of publishing
+  cloudflare --output <dir>  Override output directory (default: .build/cloudflare/)`)
 }
 
 function parseServeArgs(args: string[]): { configPath?: string; docs?: string } {
@@ -68,6 +71,26 @@ function parsePublishArgs(args: string[]): { outputDir?: string } {
 	return options
 }
 
+function parseCloudflareArgs(args: string[]): { outputDir?: string } {
+	const options: { outputDir?: string } = {}
+
+	for (let i = 0; i < args.length; i += 1) {
+		const token = args[i]
+		if (token === "--output" || token === "-o") {
+			const next = args[i + 1]
+			if (!next) {
+				throw new Error("--output option requires a directory path")
+			}
+			i += 1
+			options.outputDir = next
+		} else {
+			throw new Error(`Unknown option for cloudflare: ${token}`)
+		}
+	}
+
+	return options
+}
+
 async function main() {
 	const args = process.argv.slice(2)
 	const command = args[0]?.toLowerCase()
@@ -85,6 +108,11 @@ async function main() {
 			case "publish": {
 				const options = parsePublishArgs(args.slice(1))
 				await publishDocs({ outputDir: options.outputDir })
+				break
+			}
+			case "cloudflare": {
+				const options = parseCloudflareArgs(args.slice(1))
+				await buildCloudflare({ outputDir: options.outputDir })
 				break
 			}
 			case "help":
