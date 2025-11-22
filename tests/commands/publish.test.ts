@@ -3,10 +3,10 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest"
-import { publishDocs } from "../src/commands/publish.js"
+import { publishDocs } from "../../src/commands/publish.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
+const fixtureRoot = path.resolve(__dirname, "..", "__fixtures__", "acme")
 const configPath = path.join(fixtureRoot, "mcp-docs-server.json")
 
 const { spawnMock } = vi.hoisted(() => {

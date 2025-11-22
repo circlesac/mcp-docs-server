@@ -2,9 +2,18 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { createFsFromVolume, Volume } from "memfs"
+import { readPackageUpSync } from "read-package-up"
 import { describe, expect, it, vi } from "vitest"
 
-import { fromPackageRoot } from "../src/utils.js"
+function fromPackageRoot(...segments: string[]): string {
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const packageRootResult = readPackageUpSync({ cwd: moduleDir })
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+	return path.join(packageRoot, ...segments)
+}
 
 type FsPromises = typeof import("node:fs/promises")
 
@@ -14,7 +23,7 @@ describe("publishDocs with in-memory filesystem", () => {
 	it("writes expected package artifacts", async () => {
 		const realFs = await import("node:fs/promises")
 
-		const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
+		const fixtureRoot = path.resolve(__dirname, "..", "__fixtures__", "acme")
 		const configContent = await realFs.readFile(path.join(fixtureRoot, "mcp-docs-server.json"), "utf-8")
 		const docsIndex = await realFs.readFile(path.join(fixtureRoot, "docs", "index.md"), "utf-8")
 		const templatePath = fromPackageRoot("templates", "docs.mdx")
@@ -125,7 +134,7 @@ describe("publishDocs with in-memory filesystem", () => {
 		}))
 		vi.doMock("node:child_process", () => ({ spawn: spawnMock }))
 
-		const { publishDocs } = await import("../src/commands/publish.js")
+		const { publishDocs } = await import("../../src/commands/publish.js")
 
 		await publishDocs({ configPath: "/acme/mcp-docs-server.json", outputDir: "/acme-output" })
 

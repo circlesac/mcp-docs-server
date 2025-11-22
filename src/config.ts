@@ -1,6 +1,5 @@
 import fs from "node:fs"
 import path from "node:path"
-import { readPackageUpSync } from "read-package-up"
 import { z } from "zod"
 
 export const CONFIG_FILENAME = "mcp-docs-server.json"
@@ -51,17 +50,6 @@ function createToolName(rawName: string, rawPackage: string): string {
 	return DEFAULT_TOOL_NAME
 }
 
-function loadTemplate(_rootDir: string): string {
-	// Template is always at package root, not relative to config
-	const result = readPackageUpSync()
-	if (!result?.path) {
-		throw new Error("package.json not found. This indicates a packaging error.")
-	}
-	const packageRoot = path.dirname(result.path)
-	const templatePath = path.join(packageRoot, "templates", "docs.mdx")
-	return fs.readFileSync(templatePath, "utf-8")
-}
-
 function normalizeDocDir(dir: string): string {
 	const normalized = dir.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/").replace(/\/$/, "")
 
@@ -83,14 +71,9 @@ function ensureDirectoryExists(absolutePath: string): void {
 	}
 }
 
-export function loadConfig(options: { configPath?: string; cwd?: string; docs?: string } = {}): DocsServerConfig {
-	// Resolve config path
-	const baseDir = options.cwd ? path.resolve(options.cwd) : process.cwd()
+export function loadConfig(options: { configPath: string; templatePath: string; docs?: string }): DocsServerConfig {
+	// configPath and templatePath are required
 	const configPath = options.configPath
-		? path.isAbsolute(options.configPath)
-			? options.configPath
-			: path.resolve(baseDir, options.configPath)
-		: path.resolve(baseDir, CONFIG_FILENAME)
 	const rootDir = path.dirname(configPath)
 
 	const fileContents = fs.readFileSync(configPath, "utf-8")
@@ -129,7 +112,9 @@ export function loadConfig(options: { configPath?: string; cwd?: string; docs?: 
 	const name = rawConfig.name.trim().length === 0 ? "Acme" : rawConfig.name.trim()
 	const toolName = createToolName(rawConfig.name, rawConfig.package)
 	const title = `${name} Documentation Server`
-	const template = loadTemplate(rootDir)
+
+	// templatePath is required
+	const template = fs.readFileSync(options.templatePath, "utf-8")
 	const description = template.replace(/{{NAME}}/g, name).replace(/{{TOOL_NAME}}/g, toolName)
 	return {
 		name,

@@ -1,38 +1,49 @@
 import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { readPackageUp } from "read-package-up"
+import { fileURLToPath } from "node:url"
+import { readPackageUp, readPackageUpSync } from "read-package-up"
 
 import type { DocsServerConfig } from "../config.js"
-import { loadConfig } from "../config.js"
+import { CONFIG_FILENAME, loadConfig } from "../config.js"
 import { sanitizePackageDirName } from "../utils.js"
 
 export interface CloudflareOptions {
+	configPath?: string
+	docs?: string
 	outputDir?: string
 	dryRun?: boolean
 	accountId?: string
 }
 
 export async function handleCloudflare(options: CloudflareOptions = {}): Promise<void> {
-	const config = loadConfig()
+	// Resolve configPath: process.cwd() + mcp-docs-server.json unless provided
+	const configPath = options.configPath
+		? path.isAbsolute(options.configPath)
+			? options.configPath
+			: path.resolve(process.cwd(), options.configPath)
+		: path.join(process.cwd(), CONFIG_FILENAME)
+
+	// Find templatePath from npm package using read-package-up
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const packageRootResult = readPackageUpSync({ cwd: moduleDir })
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+	const templatePath = path.join(packageRoot, "templates", "docs.mdx")
+
+	const config = loadConfig({ configPath, templatePath, docs: options.docs })
 	const buildDir = await prepareBuildDirectory(config, options.outputDir)
 
 	// Always clean the target directory before building
 	await fs.rm(buildDir, { recursive: true, force: true })
 	await fs.mkdir(buildDir, { recursive: true })
 
-	// Find package root for copying package-level files
-	const packageRootResult = await readPackageUp()
-	if (!packageRootResult?.path) {
-		throw new Error("package.json not found. This indicates a packaging error.")
-	}
-	const packageRoot = path.dirname(packageRootResult.path)
-
 	// Copy user's docs
 	await copyDocs(config, buildDir)
 
-	// Copy config file
-	const configPath = path.join(packageRoot, "mcp-docs-server.json")
+	// Copy config file (use the resolved configPath from above)
 	await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
 
 	// Copy templates directory
@@ -116,8 +127,9 @@ async function copyCloudflareEntrypoint(packageRoot: string, buildDir: string): 
 }
 
 async function generatePackageJson(buildDir: string): Promise<void> {
-	// Read root package.json to get dependencies for npm install
-	const result = await readPackageUp()
+	// Read root package.json to get dependencies for npm install (relative to this module's location)
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const result = await readPackageUp({ cwd: moduleDir })
 	if (!result?.packageJson) {
 		throw new Error("package.json not found. This indicates a packaging error.")
 	}
@@ -137,8 +149,9 @@ async function generatePackageJson(buildDir: string): Promise<void> {
 async function generateWranglerConfig(config: DocsServerConfig, buildDir: string, accountId?: string): Promise<void> {
 	const workerName = sanitizePackageDirName(config.packageName)
 
-	// Read root wrangler.json as template
-	const packageRootResult = await readPackageUp()
+	// Read root wrangler.json as template (relative to this module's location)
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const packageRootResult = await readPackageUp({ cwd: moduleDir })
 	if (!packageRootResult?.path) {
 		throw new Error("package.json not found. This indicates a packaging error.")
 	}

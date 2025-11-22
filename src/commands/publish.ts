@@ -1,24 +1,40 @@
 import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { readPackageUp } from "read-package-up"
+import { fileURLToPath } from "node:url"
+import { readPackageUpSync } from "read-package-up"
 
 import type { DocsServerConfig } from "../config.js"
-import { loadConfig } from "../config.js"
+import { CONFIG_FILENAME, loadConfig } from "../config.js"
 import { sanitizePackageDirName } from "../utils.js"
 
 const SCRIPT_BASENAME = "stdio.js"
 
 export interface PublishOptions {
 	configPath?: string
-	cwd?: string
+	docs?: string
 	outputDir?: string
 }
 
 // Export publishDocs for backward compatibility (used by tests and bin script)
 export async function publishDocs(options: PublishOptions = {}): Promise<void> {
-	const config = loadConfig(options)
-	const runtimeVersion = await readPackageVersion()
+	// Resolve configPath: process.cwd() + mcp-docs-server.json unless provided
+	const configPath = options.configPath
+		? path.isAbsolute(options.configPath)
+			? options.configPath
+			: path.resolve(process.cwd(), options.configPath)
+		: path.join(process.cwd(), CONFIG_FILENAME)
+
+	// Find templatePath from npm package using read-package-up
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const packageRootResult = readPackageUpSync({ cwd: moduleDir })
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+	const templatePath = path.join(packageRoot, "templates", "docs.mdx")
+
+	const config = loadConfig({ configPath, templatePath, docs: options.docs })
 	const packageDir = await preparePackageDirectory(config, options.outputDir)
 
 	// Always clean the target directory before building
@@ -29,7 +45,7 @@ export async function publishDocs(options: PublishOptions = {}): Promise<void> {
 	await copyConfigFile(config, packageDir)
 	await copyNpmrcIfPresent(config, packageDir)
 	await writeBinScript(config, packageDir)
-	await writePackageJson(config, packageDir, runtimeVersion)
+	await writePackageJson(config, packageDir)
 
 	if (options.outputDir) {
 		// If outputDir was explicitly provided, just report the location (staging mode)
@@ -40,14 +56,6 @@ export async function publishDocs(options: PublishOptions = {}): Promise<void> {
 		await publishWithNpm(packageDir)
 		console.info("Publish complete")
 	}
-}
-
-async function readPackageVersion(): Promise<string> {
-	const result = await readPackageUp()
-	if (!result?.packageJson?.version) {
-		throw new Error("package.json not found or missing version. This indicates a packaging error.")
-	}
-	return result.packageJson.version
 }
 
 async function preparePackageDirectory(config: DocsServerConfig, outputDir?: string): Promise<string> {
@@ -107,7 +115,7 @@ await runServer({ configPath })
 	await fs.writeFile(scriptPath, contents, { mode: 0o755 })
 }
 
-async function writePackageJson(config: DocsServerConfig, destination: string, runtimeVersion: string): Promise<void> {
+async function writePackageJson(config: DocsServerConfig, destination: string): Promise<void> {
 	const files = new Set<string>(["bin", path.basename(config.configPath), config.docRoot.relativePath])
 
 	const pkgJson = {
@@ -117,7 +125,7 @@ async function writePackageJson(config: DocsServerConfig, destination: string, r
 		bin: `bin/${SCRIPT_BASENAME}`,
 		files: Array.from(files),
 		dependencies: {
-			"@circlesac/mcp-docs-server": `^${runtimeVersion}`
+			"@circlesac/mcp-docs-server": "latest"
 		},
 		engines: {
 			node: ">=18"

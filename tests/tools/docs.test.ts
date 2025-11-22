@@ -1,22 +1,31 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js"
+import { readPackageUpSync } from "read-package-up"
 import { beforeAll, describe, expect, it } from "vitest"
 
-import { loadConfig } from "../src/config.js"
-import { createDocsTool } from "../src/tools/docs.js"
+import { loadConfig } from "../../src/config.js"
+import { createDocsTool } from "../../src/tools/docs.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
+const fixtureRoot = path.resolve(__dirname, "..", "__fixtures__", "acme")
 const configPath = path.join(fixtureRoot, "mcp-docs-server.json")
+
+// Find templatePath from npm package
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+const packageRootResult = readPackageUpSync({ cwd: moduleDir })
+if (!packageRootResult?.path) {
+	throw new Error("package.json not found. This indicates a packaging error.")
+}
+const packageRoot = path.dirname(packageRootResult.path)
+const templatePath = path.join(packageRoot, "templates", "docs.mdx")
 
 describe("generic docs tool", () => {
 	let docsTool: Awaited<ReturnType<typeof createDocsTool>>
 
 	beforeAll(async () => {
-		const config = loadConfig({ configPath })
+		const config = loadConfig({ configPath, templatePath })
 		docsTool = await createDocsTool(config)
 	})
 
