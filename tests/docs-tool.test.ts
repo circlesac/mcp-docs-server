@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url"
 
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
 
-import { clearConfigCache, getConfig, loadConfig } from "../src/config.js"
+import { loadConfig } from "../src/config.js"
 import { createDocsTool } from "../src/tools/docs.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -16,13 +16,8 @@ describe("generic docs tool", () => {
 	let docsTool: Awaited<ReturnType<typeof createDocsTool>>
 
 	beforeAll(async () => {
-		await loadConfig({ configPath })
-		const config = getConfig()
+		const config = await loadConfig({ configPath })
 		docsTool = await createDocsTool(config)
-	})
-
-	afterAll(() => {
-		clearConfigCache()
 	})
 
 	it("exposes a generated tool name", () => {
@@ -34,14 +29,14 @@ describe("generic docs tool", () => {
 	} as RequestHandlerExtra<ServerRequest, ServerNotification>
 
 	it("returns markdown content for a requested file", async () => {
-		const result = await docsTool.callback({ paths: ["index.md"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["index.md"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("Acme documentation")
 		expect(textContent).toContain("## index.md")
 	})
 
 	it("lists directory contents and aggregates files", async () => {
-		const result = await docsTool.callback({ paths: ["company"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["company"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("Directory contents of company")
 		expect(textContent).toContain("- docs/company/operations.md")
@@ -49,26 +44,26 @@ describe("generic docs tool", () => {
 	})
 
 	it("suggests related files when the path is unknown", async () => {
-		const result = await docsTool.callback({ paths: ["unknown/path"], queryKeywords: ["company"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["unknown/path"], queryKeywords: ["company"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain('Path "unknown/path" not found')
 		expect(textContent).toMatch(/company\/operations\.md/)
 	})
 
 	it("rejects path traversal attempts", async () => {
-		const result = await docsTool.callback({ paths: ["../package.json"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["../package.json"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("Invalid path")
 	})
 
 	it("serves nested manual content", async () => {
-		const result = await docsTool.callback({ paths: ["manuals/quickstart.md"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["manuals/quickstart.md"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("Quickstart Manual")
 	})
 
 	it("handles multiple paths in one request", async () => {
-		const result = await docsTool.callback({ paths: ["index.md", "company/operations.md"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["index.md", "company/operations.md"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("## index.md")
 		expect(textContent).toContain("## company/operations.md")

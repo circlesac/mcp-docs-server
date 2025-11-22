@@ -12,8 +12,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 describe("publishDocs with in-memory filesystem", () => {
 	it("writes expected package artifacts", async () => {
-		await vi.resetModules()
-
 		const realFs = await import("node:fs/promises")
 
 		const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
@@ -140,6 +138,5 @@ describe("publishDocs with in-memory filesystem", () => {
 
 		vi.doUnmock("node:fs/promises")
 		vi.doUnmock("node:child_process")
-		await vi.resetModules()
 	})
 })

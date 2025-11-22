@@ -4,7 +4,6 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest"
 import { publishDocs } from "../src/commands/publish.js"
-import { clearConfigCache } from "../src/config.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const fixtureRoot = path.resolve(__dirname, "__fixtures__", "acme")
@@ -35,7 +34,6 @@ describe("publishDocs", () => {
 	let consoleSpy: MockInstance
 
 	beforeEach(() => {
-		clearConfigCache()
 		spawnMock.mockClear()
 		writeFileSpy = vi.spyOn(fs, "writeFile")
 		consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {})
@@ -44,7 +42,6 @@ describe("publishDocs", () => {
 	afterEach(() => {
 		writeFileSpy.mockRestore()
 		consoleSpy.mockRestore()
-		clearConfigCache()
 	})
 
 	it("packages docs and invokes npm publish", async () => {

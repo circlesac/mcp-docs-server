@@ -2,8 +2,6 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
 
-import { fromPackageRoot, getPackageRoot } from "./utils.js"
-
 export const CONFIG_FILENAME = "mcp-docs-server.json"
 export const DEFAULT_TOOL_NAME = "searchDocs"
 
@@ -32,9 +30,6 @@ export interface DocsServerConfig {
 	raw: z.infer<typeof configSchema>
 }
 
-let cachedConfig: DocsServerConfig | null = null
-let cachedTemplate: string | null = null
-
 function createToolName(rawName: string, rawPackage: string): string {
 	const candidates = [rawName, rawPackage]
 
@@ -55,19 +50,12 @@ function createToolName(rawName: string, rawPackage: string): string {
 	return DEFAULT_TOOL_NAME
 }
 
-async function loadTemplate(isVFS = false): Promise<string> {
-	if (cachedTemplate) {
-		return cachedTemplate
-	}
-
-	const templatePath = isVFS ? "/bundle/templates/docs.mdx" : fromPackageRoot(getPackageRoot(), "templates", "docs.mdx")
+async function loadTemplate(pathPrefix: string): Promise<string> {
+	const templatePath = path.join(pathPrefix, "templates", "docs.mdx")
 	try {
-		cachedTemplate = await fs.readFile(templatePath, "utf-8")
-		return cachedTemplate
+		return await fs.readFile(templatePath, "utf-8")
 	} catch (_error) {
-		const fallback = `Get {{NAME}} internal documentation.`
-		cachedTemplate = fallback
-		return fallback
+		return `Get {{NAME}} internal documentation.`
 	}
 }
 
@@ -100,27 +88,10 @@ async function ensureDirectoryExists(absolutePath: string): Promise<void> {
 }
 
 export async function loadConfig(options: { configPath?: string; cwd?: string; docs?: string } = {}): Promise<DocsServerConfig> {
-	if (cachedConfig) {
-		return cachedConfig
-	}
-
-	// Determine config path - if configPath is provided with /bundle/ prefix, use VFS
-	// Otherwise, use file system paths
-	const isVFS = options.configPath?.startsWith("/bundle/")
-
-	let configPath: string
-	let rootDir: string
-
-	if (isVFS) {
-		// VFS path (Cloudflare Workers)
-		configPath = options.configPath || `/bundle/${CONFIG_FILENAME}`
-		rootDir = "/bundle"
-	} else {
-		// File system path (Node.js)
-		const baseDir = options.cwd ? path.resolve(options.cwd) : process.cwd()
-		configPath = options.configPath ? path.resolve(options.configPath) : path.resolve(baseDir, CONFIG_FILENAME)
-		rootDir = path.dirname(configPath)
-	}
+	// Resolve config path from file system
+	const baseDir = options.cwd ? path.resolve(options.cwd) : process.cwd()
+	const configPath = options.configPath ? path.resolve(options.configPath) : path.resolve(baseDir, CONFIG_FILENAME)
+	const rootDir = path.dirname(configPath)
 
 	let fileContents: string
 	try {
@@ -144,14 +115,7 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 	// Use --docs option if provided, otherwise use config file value or default
 	let docRoot: DocRoot
 	if (options.docs) {
-		if (isVFS || options.docs.startsWith("/bundle/")) {
-			// VFS path: use as-is
-			const docsDir = normalizeDocDir(options.docs.replace(/^\/bundle\//, ""))
-			docRoot = {
-				relativePath: docsDir,
-				absolutePath: `/bundle/${docsDir}`
-			}
-		} else if (path.isAbsolute(options.docs)) {
+		if (path.isAbsolute(options.docs)) {
 			// Absolute path: use as-is
 			docRoot = {
 				relativePath: path.basename(options.docs),
@@ -162,7 +126,7 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 			const docsDir = normalizeDocDir(options.docs)
 			docRoot = {
 				relativePath: docsDir,
-				absolutePath: isVFS ? `/bundle/${docsDir}` : path.resolve(rootDir, docsDir)
+				absolutePath: path.resolve(rootDir, docsDir)
 			}
 		}
 	} else {
@@ -170,21 +134,18 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 		const docsDir = normalizeDocDir(rawConfig.docs ?? "docs")
 		docRoot = {
 			relativePath: docsDir,
-			absolutePath: isVFS ? `/bundle/${docsDir}` : path.resolve(rootDir, docsDir)
+			absolutePath: path.resolve(rootDir, docsDir)
 		}
 	}
 
-	// Skip directory check in VFS (it's read-only and always exists if bundled)
-	if (!isVFS) {
-		await ensureDirectoryExists(docRoot.absolutePath)
-	}
+	await ensureDirectoryExists(docRoot.absolutePath)
 
 	const name = rawConfig.name.trim().length === 0 ? "Acme" : rawConfig.name.trim()
 	const toolName = createToolName(rawConfig.name, rawConfig.package)
 	const title = `${name} Documentation Server`
-	const template = await loadTemplate(isVFS)
+	const template = await loadTemplate(rootDir)
 	const description = template.replace(/{{NAME}}/g, name).replace(/{{TOOL_NAME}}/g, toolName)
-	const config: DocsServerConfig = {
+	return {
 		name,
 		title,
 		packageName: rawConfig.package,
@@ -196,18 +157,4 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 		rootDir,
 		raw: rawConfig
 	}
-
-	cachedConfig = config
-	return config
-}
-
-export function getConfig(): DocsServerConfig {
-	if (!cachedConfig) {
-		throw new Error("Config not loaded. Call loadConfig() first.")
-	}
-	return cachedConfig
-}
-
-export function clearConfigCache(): void {
-	cachedConfig = null
 }

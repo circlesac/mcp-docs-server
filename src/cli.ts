@@ -4,7 +4,7 @@ import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { handleCloudflare } from "./commands/cloudflare.js"
-import { handlePublish } from "./commands/publish.js"
+import { publishDocs } from "./commands/publish.js"
 import { runServer } from "./commands/serve.js"
 import { logger } from "./logger.js"
 import { fromPackageRoot } from "./utils.js"
@@ -123,7 +123,7 @@ async function main() {
 			}
 			case "publish": {
 				const options = parsePublishArgs(args.slice(1))
-				await handlePublish(options)
+				await publishDocs(options)
 				break
 			}
 			case "cloudflare": {

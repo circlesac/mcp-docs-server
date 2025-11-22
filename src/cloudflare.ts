@@ -37,14 +37,7 @@ export class DocsMCP extends McpAgent<Env> {
 			}
 		}
 		const docsTool = await createDocsTool(config)
-		this.server.registerTool(
-			docsTool.name,
-			{
-				description: docsTool.description,
-				inputSchema: docsTool.inputSchema
-			},
-			docsTool.callback
-		)
+		this.server.registerTool(docsTool.name, docsTool.config, docsTool.cb)
 	}
 }
 

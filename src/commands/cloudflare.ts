@@ -3,7 +3,8 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { readPackageUp } from "read-package-up"
 
-import { clearConfigCache, getConfig, loadConfig } from "../config.js"
+import type { DocsServerConfig } from "../config.js"
+import { loadConfig } from "../config.js"
 import { sanitizePackageDirName } from "../utils.js"
 
 export interface CloudflareOptions {
@@ -12,7 +13,60 @@ export interface CloudflareOptions {
 	accountId?: string
 }
 
-async function prepareBuildDirectory(outputDir?: string): Promise<string> {
+export async function handleCloudflare(options: CloudflareOptions = {}): Promise<void> {
+	const config = await loadConfig()
+	const buildDir = await prepareBuildDirectory(config, options.outputDir)
+
+	// Always clean the target directory before building
+	await fs.rm(buildDir, { recursive: true, force: true })
+	await fs.mkdir(buildDir, { recursive: true })
+
+	// Copy user's docs
+	await copyDocs(config, buildDir)
+
+	// Copy config file for VFS access (even though we use env vars, it's useful to have it bundled)
+	const configPath = path.resolve(process.cwd(), "mcp-docs-server.json")
+	try {
+		await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
+	} catch {
+		// Config file might not exist, that's okay
+	}
+
+	// Copy templates directory for VFS access
+	await copyTemplates(buildDir)
+
+	// Copy source files needed by cloudflare.ts
+	await copySourceFiles(buildDir)
+
+	// Copy cloudflare.ts entrypoint as index.ts
+	await copyCloudflareEntrypoint(buildDir)
+
+	// Generate package.json for the build directory
+	await generatePackageJson(buildDir)
+
+	// Generate wrangler.json with worker name
+	await generateWranglerConfig(config, buildDir, options.accountId)
+
+	if (options.dryRun) {
+		console.info(`Dry run complete. Build directory prepared at ${buildDir}`)
+		return
+	}
+
+	// Install dependencies
+	console.info("Installing dependencies...")
+	await runNpmInstall(buildDir)
+
+	// Generate TypeScript types
+	console.info("Generating TypeScript types...")
+	await runWranglerTypes(buildDir)
+
+	// Deploy to Cloudflare
+	console.info("Deploying Cloudflare Worker...")
+	await runWranglerDeploy(buildDir)
+	console.info(`Cloudflare deployment complete`)
+}
+
+async function prepareBuildDirectory(config: DocsServerConfig, outputDir?: string): Promise<string> {
 	if (outputDir) {
 		// Use provided output directory (override)
 		const buildDir = path.resolve(outputDir)
@@ -26,8 +80,7 @@ async function prepareBuildDirectory(outputDir?: string): Promise<string> {
 	return buildDir
 }
 
-async function copyDocs(buildDir: string): Promise<void> {
-	const config = getConfig()
+async function copyDocs(config: DocsServerConfig, buildDir: string): Promise<void> {
 	const targetDir = path.join(buildDir, config.docRoot.relativePath)
 	await fs.mkdir(path.dirname(targetDir), { recursive: true })
 	await fs.cp(config.docRoot.absolutePath, targetDir, { recursive: true, force: true })
@@ -60,36 +113,25 @@ async function copyCloudflareEntrypoint(buildDir: string): Promise<void> {
 }
 
 async function generatePackageJson(buildDir: string): Promise<void> {
-	// Read root package.json as template using read-package-up
-	let rootPackageJson: Record<string, unknown> = {}
-	try {
-		const result = await readPackageUp()
-		if (result?.packageJson) {
-			rootPackageJson = result.packageJson as Record<string, unknown>
-		}
-	} catch {
-		// If package.json doesn't exist, create a minimal one
-		rootPackageJson = {
-			name: "mcp-docs-server",
-			version: "0.0.0",
-			type: "module"
-		}
+	// Read root package.json to get dependencies for npm install
+	const result = await readPackageUp()
+	if (!result?.packageJson) {
+		throw new Error("package.json not found. This indicates a packaging error.")
 	}
 
+	const dependencies = (result.packageJson.dependencies as Record<string, string>) || {}
+
 	// Generate minimal package.json for Cloudflare Worker build
+	// Only include what's needed for npm install
 	const buildPackageJson = {
-		name: rootPackageJson.name || "mcp-docs-server",
-		version: rootPackageJson.version || "0.0.0",
 		type: "module",
-		dependencies: rootPackageJson.dependencies || {}
-		// Remove devDependencies, scripts, and other fields not needed for build
+		dependencies
 	}
 
 	await fs.writeFile(path.join(buildDir, "package.json"), `${JSON.stringify(buildPackageJson, null, 2)}\n`)
 }
 
-async function generateWranglerConfig(buildDir: string, accountId?: string): Promise<void> {
-	const config = getConfig()
+async function generateWranglerConfig(config: DocsServerConfig, buildDir: string, accountId?: string): Promise<void> {
 	const workerName = sanitizePackageDirName(config.packageName)
 
 	// Read root wrangler.json as template
@@ -182,61 +224,4 @@ async function runWranglerDeploy(buildDir: string): Promise<void> {
 			}
 		})
 	})
-}
-
-export async function handleCloudflare(options: CloudflareOptions = {}): Promise<void> {
-	await loadConfig()
-	const buildDir = await prepareBuildDirectory(options.outputDir)
-
-	// Always clean the target directory before building
-	await fs.rm(buildDir, { recursive: true, force: true })
-	await fs.mkdir(buildDir, { recursive: true })
-
-	try {
-		// Copy user's docs
-		await copyDocs(buildDir)
-
-		// Copy config file for VFS access (even though we use env vars, it's useful to have it bundled)
-		const configPath = path.resolve(process.cwd(), "mcp-docs-server.json")
-		try {
-			await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
-		} catch {
-			// Config file might not exist, that's okay
-		}
-
-		// Copy templates directory for VFS access
-		await copyTemplates(buildDir)
-
-		// Copy source files needed by cloudflare.ts
-		await copySourceFiles(buildDir)
-
-		// Copy cloudflare.ts entrypoint as index.ts
-		await copyCloudflareEntrypoint(buildDir)
-
-		// Generate package.json for the build directory
-		await generatePackageJson(buildDir)
-
-		// Generate wrangler.json with worker name
-		await generateWranglerConfig(buildDir, options.accountId)
-
-		if (options.dryRun) {
-			console.info(`Dry run complete. Build directory prepared at ${buildDir}`)
-			return
-		}
-
-		// Install dependencies
-		console.info("Installing dependencies...")
-		await runNpmInstall(buildDir)
-
-		// Generate TypeScript types
-		console.info("Generating TypeScript types...")
-		await runWranglerTypes(buildDir)
-
-		// Deploy to Cloudflare
-		console.info("Deploying Cloudflare Worker...")
-		await runWranglerDeploy(buildDir)
-		console.info(`Cloudflare deployment complete`)
-	} finally {
-		clearConfigCache()
-	}
 }
