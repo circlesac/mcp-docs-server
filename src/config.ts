@@ -1,5 +1,6 @@
-import fs from "node:fs/promises"
+import fs from "node:fs"
 import path from "node:path"
+import { readPackageUpSync } from "read-package-up"
 import { z } from "zod"
 
 export const CONFIG_FILENAME = "mcp-docs-server.json"
@@ -50,13 +51,15 @@ function createToolName(rawName: string, rawPackage: string): string {
 	return DEFAULT_TOOL_NAME
 }
 
-async function loadTemplate(pathPrefix: string): Promise<string> {
-	const templatePath = path.join(pathPrefix, "templates", "docs.mdx")
-	try {
-		return await fs.readFile(templatePath, "utf-8")
-	} catch (_error) {
-		return `Get {{NAME}} internal documentation.`
+function loadTemplate(_rootDir: string): string {
+	// Template is always at package root, not relative to config
+	const result = readPackageUpSync()
+	if (!result?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
 	}
+	const packageRoot = path.dirname(result.path)
+	const templatePath = path.join(packageRoot, "templates", "docs.mdx")
+	return fs.readFileSync(templatePath, "utf-8")
 }
 
 function normalizeDocDir(dir: string): string {
@@ -73,42 +76,25 @@ function normalizeDocDir(dir: string): string {
 	return normalized.length === 0 ? "docs" : normalized
 }
 
-async function ensureDirectoryExists(absolutePath: string): Promise<void> {
-	try {
-		const stats = await fs.stat(absolutePath)
-		if (!stats.isDirectory()) {
-			throw new Error(`Expected directory at ${absolutePath}`)
-		}
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-			throw new Error(`Documentation directory not found: ${absolutePath}`)
-		}
-		throw error
+function ensureDirectoryExists(absolutePath: string): void {
+	const stats = fs.statSync(absolutePath)
+	if (!stats.isDirectory()) {
+		throw new Error(`Expected directory at ${absolutePath}`)
 	}
 }
 
-export async function loadConfig(options: { configPath?: string; cwd?: string; docs?: string } = {}): Promise<DocsServerConfig> {
-	// Resolve config path from file system
+export function loadConfig(options: { configPath?: string; cwd?: string; docs?: string } = {}): DocsServerConfig {
+	// Resolve config path
 	const baseDir = options.cwd ? path.resolve(options.cwd) : process.cwd()
-	const configPath = options.configPath ? path.resolve(options.configPath) : path.resolve(baseDir, CONFIG_FILENAME)
+	const configPath = options.configPath
+		? path.isAbsolute(options.configPath)
+			? options.configPath
+			: path.resolve(baseDir, options.configPath)
+		: path.resolve(baseDir, CONFIG_FILENAME)
 	const rootDir = path.dirname(configPath)
 
-	let fileContents: string
-	try {
-		fileContents = await fs.readFile(configPath, "utf-8")
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-			throw new Error(`Configuration file not found: ${configPath}`)
-		}
-		throw new Error(`Failed to read ${configPath}: ${error instanceof Error ? error.message : String(error)}`)
-	}
-
-	let parsedJson: unknown
-	try {
-		parsedJson = JSON.parse(fileContents)
-	} catch (error) {
-		throw new Error(`Invalid JSON in ${configPath}: ${error instanceof Error ? error.message : String(error)}`)
-	}
+	const fileContents = fs.readFileSync(configPath, "utf-8")
+	const parsedJson: unknown = JSON.parse(fileContents)
 
 	const rawConfig = configSchema.parse(parsedJson)
 
@@ -138,12 +124,12 @@ export async function loadConfig(options: { configPath?: string; cwd?: string; d
 		}
 	}
 
-	await ensureDirectoryExists(docRoot.absolutePath)
+	ensureDirectoryExists(docRoot.absolutePath)
 
 	const name = rawConfig.name.trim().length === 0 ? "Acme" : rawConfig.name.trim()
 	const toolName = createToolName(rawConfig.name, rawConfig.package)
 	const title = `${name} Documentation Server`
-	const template = await loadTemplate(rootDir)
+	const template = loadTemplate(rootDir)
 	const description = template.replace(/{{NAME}}/g, name).replace(/{{TOOL_NAME}}/g, toolName)
 	return {
 		name,

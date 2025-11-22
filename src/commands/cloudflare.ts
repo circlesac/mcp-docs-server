@@ -14,32 +14,35 @@ export interface CloudflareOptions {
 }
 
 export async function handleCloudflare(options: CloudflareOptions = {}): Promise<void> {
-	const config = await loadConfig()
+	const config = loadConfig()
 	const buildDir = await prepareBuildDirectory(config, options.outputDir)
 
 	// Always clean the target directory before building
 	await fs.rm(buildDir, { recursive: true, force: true })
 	await fs.mkdir(buildDir, { recursive: true })
 
+	// Find package root for copying package-level files
+	const packageRootResult = await readPackageUp()
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+
 	// Copy user's docs
 	await copyDocs(config, buildDir)
 
-	// Copy config file for VFS access (even though we use env vars, it's useful to have it bundled)
-	const configPath = path.resolve(process.cwd(), "mcp-docs-server.json")
-	try {
-		await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
-	} catch {
-		// Config file might not exist, that's okay
-	}
+	// Copy config file
+	const configPath = path.join(packageRoot, "mcp-docs-server.json")
+	await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
 
-	// Copy templates directory for VFS access
-	await copyTemplates(buildDir)
+	// Copy templates directory
+	await copyTemplates(packageRoot, buildDir)
 
 	// Copy source files needed by cloudflare.ts
-	await copySourceFiles(buildDir)
+	await copySourceFiles(packageRoot, buildDir)
 
 	// Copy cloudflare.ts entrypoint as index.ts
-	await copyCloudflareEntrypoint(buildDir)
+	await copyCloudflareEntrypoint(packageRoot, buildDir)
 
 	// Generate package.json for the build directory
 	await generatePackageJson(buildDir)
@@ -86,27 +89,27 @@ async function copyDocs(config: DocsServerConfig, buildDir: string): Promise<voi
 	await fs.cp(config.docRoot.absolutePath, targetDir, { recursive: true, force: true })
 }
 
-async function copySourceFiles(buildDir: string): Promise<void> {
+async function copySourceFiles(packageRoot: string, buildDir: string): Promise<void> {
 	// Copy all source files needed by cloudflare.ts to src/ subdirectory
 	const filesToCopy = ["config.ts", "logger.ts", "tools/docs.ts", "utils.ts"]
 
 	for (const file of filesToCopy) {
-		const sourcePath = path.resolve(process.cwd(), "src", file)
+		const sourcePath = path.join(packageRoot, "src", file)
 		const targetPath = path.join(buildDir, "src", file)
 		await fs.mkdir(path.dirname(targetPath), { recursive: true })
 		await fs.cp(sourcePath, targetPath, { force: true })
 	}
 }
 
-async function copyTemplates(buildDir: string): Promise<void> {
-	// Copy templates directory so it's available in VFS at /bundle/templates/
-	const sourcePath = path.resolve(process.cwd(), "templates")
+async function copyTemplates(packageRoot: string, buildDir: string): Promise<void> {
+	// Copy templates directory
+	const sourcePath = path.join(packageRoot, "templates")
 	const targetPath = path.join(buildDir, "templates")
 	await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
 }
 
-async function copyCloudflareEntrypoint(buildDir: string): Promise<void> {
-	const sourcePath = path.resolve(process.cwd(), "src", "cloudflare.ts")
+async function copyCloudflareEntrypoint(packageRoot: string, buildDir: string): Promise<void> {
+	const sourcePath = path.join(packageRoot, "src", "cloudflare.ts")
 	const targetPath = path.join(buildDir, "src", "index.ts")
 	await fs.mkdir(path.dirname(targetPath), { recursive: true })
 	await fs.cp(sourcePath, targetPath, { force: true })
@@ -135,34 +138,22 @@ async function generateWranglerConfig(config: DocsServerConfig, buildDir: string
 	const workerName = sanitizePackageDirName(config.packageName)
 
 	// Read root wrangler.json as template
-	const rootWranglerPath = path.resolve(process.cwd(), "wrangler.json")
+	const packageRootResult = await readPackageUp()
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+	const rootWranglerPath = path.join(packageRoot, "wrangler.json")
 	const content = await fs.readFile(rootWranglerPath, "utf-8")
 	const rootWranglerConfig = JSON.parse(content) as Record<string, unknown>
-
-	// Read package.json for version using read-package-up
-	let version = config.version
-	try {
-		const result = await readPackageUp()
-		if (result?.packageJson?.version) {
-			version = result.packageJson.version as string
-		}
-	} catch {
-		// Fallback to config version
-	}
 
 	// Merge root config with build-specific overrides
 	const wranglerConfig = {
 		...rootWranglerConfig,
 		name: workerName,
 		main: "./src/index.ts",
-		...(accountId && { account_id: accountId }),
-		vars: {
-			MCP_DOCS_SERVER_NAME: config.name,
-			MCP_DOCS_SERVER_VERSION: version,
-			MCP_DOCS_SERVER_TOOL_NAME: config.tool,
-			MCP_DOCS_SERVER_DOCS_PATH: config.docRoot.relativePath,
-			MCP_DOCS_SERVER_PACKAGE_NAME: config.packageName
-		}
+		...(accountId && { account_id: accountId })
+		// No vars needed - we read from bundled mcp-docs-server.json instead
 		// Keep rules, migrations, durable_objects, etc. from root config
 	}
 

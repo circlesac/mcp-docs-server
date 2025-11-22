@@ -18,7 +18,7 @@ export async function runServer(options: RunServerOptions = {}): Promise<void> {
 	try {
 		const transport = new StdioServerTransport()
 		await server.connect(transport)
-		const config = await loadConfig(options)
+		const config = loadConfig(options)
 		await logger.info(`Started ${config.name}`)
 	} catch (error) {
 		await logger.error("Failed to start MCP docs server", error)
@@ -27,7 +27,7 @@ export async function runServer(options: RunServerOptions = {}): Promise<void> {
 }
 
 async function createServer(options: RunServerOptions = {}): Promise<McpServer> {
-	const config = await loadConfig(options)
+	const config = loadConfig(options)
 
 	const result = await readPackageUp()
 	if (!result?.packageJson?.version) {

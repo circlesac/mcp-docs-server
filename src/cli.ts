@@ -1,17 +1,9 @@
 #!/usr/bin/env node
 
-import { dirname } from "node:path"
-import { fileURLToPath } from "node:url"
-
 import { handleCloudflare } from "./commands/cloudflare.js"
 import { publishDocs } from "./commands/publish.js"
 import { runServer } from "./commands/serve.js"
 import { logger } from "./logger.js"
-import { fromPackageRoot } from "./utils.js"
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const PACKAGE_ROOT = dirname(__dirname)
-const PACKAGE_CONFIG_PATH = fromPackageRoot(PACKAGE_ROOT, "mcp-docs-server.json")
 
 async function printUsage(): Promise<void> {
 	await logger.info(`Usage: npx @circlesac/mcp-docs-server [command]
@@ -114,7 +106,8 @@ async function main() {
 	try {
 		switch (command) {
 			case undefined:
-				await runServer({ configPath: PACKAGE_CONFIG_PATH })
+				// Default: serve from current working directory
+				await runServer()
 				break
 			case "serve": {
 				const options = parseServeArgs(args.slice(1))

@@ -16,7 +16,7 @@ describe("generic docs tool", () => {
 	let docsTool: Awaited<ReturnType<typeof createDocsTool>>
 
 	beforeAll(async () => {
-		const config = await loadConfig({ configPath })
+		const config = loadConfig({ configPath })
 		docsTool = await createDocsTool(config)
 	})
 

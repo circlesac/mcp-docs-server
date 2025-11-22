@@ -61,7 +61,7 @@ export async function createDocsTool(config: DocsServerConfig) {
 					if (result.isSecurityViolation) {
 						return { path: docPath, content: null, error: "Invalid path" }
 					}
-					const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot], undefined)
+					const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot])
 					const errorMessage = [`Path "${docPath}" not found.`, availablePaths, suggestions].filter(Boolean).join("\n\n")
 					return { path: docPath, content: null, error: errorMessage }
 				} catch (error) {
@@ -195,7 +195,7 @@ async function readMdContent(docPath: string, queryKeywords: string[], config: D
 				fileContents += `\n\n# ${displayPath}\n\n${content}`
 			}
 
-			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath], undefined)
+			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath])
 			const suggestionBlock = suggestions ? ["", "---", "", suggestions].join("\n") : ""
 
 			return { found: true, content: header + fileContents + suggestionBlock, isSecurityViolation: false }

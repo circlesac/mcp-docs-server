@@ -1,41 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { McpAgent } from "agents/mcp"
-import type { DocsServerConfig } from "./config.js"
+import { loadConfig } from "./config.js"
 import { createDocsTool } from "./tools/docs.js"
+
+// Load config from bundled mcp-docs-server.json at module level
+const config = loadConfig({ configPath: "/bundle/mcp-docs-server.json" })
 
 // Export DocsMCP class for Durable Object binding
 export class DocsMCP extends McpAgent<Env> {
-	server!: McpServer
+	server = new McpServer({ name: config.name, version: config.version })
 
 	async init() {
-		const name = this.env.MCP_DOCS_SERVER_NAME
-		const version = this.env.MCP_DOCS_SERVER_VERSION
-		const toolName = this.env.MCP_DOCS_SERVER_TOOL_NAME
-		const docsPath = this.env.MCP_DOCS_SERVER_DOCS_PATH
-		const packageName = this.env.MCP_DOCS_SERVER_PACKAGE_NAME
-
-		this.server = new McpServer({ name, version })
-
-		const config: DocsServerConfig = {
-			name,
-			title: `${name} Documentation Server`,
-			packageName,
-			version,
-			tool: toolName,
-			description: `Get ${name} internal documentation.`,
-			docRoot: {
-				relativePath: docsPath,
-				absolutePath: `/bundle/${docsPath}`
-			},
-			configPath: "/bundle/mcp-docs-server.json",
-			rootDir: "/bundle",
-			raw: {
-				name,
-				package: packageName,
-				version,
-				docs: docsPath
-			}
-		}
 		const docsTool = await createDocsTool(config)
 		this.server.registerTool(docsTool.name, docsTool.config, docsTool.cb)
 	}

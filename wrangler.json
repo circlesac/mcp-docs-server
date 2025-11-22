@@ -17,13 +17,6 @@
       }
     ]
   },
-  "vars": {
-    "MCP_DOCS_SERVER_NAME": "mcp-docs-server",
-    "MCP_DOCS_SERVER_VERSION": "0.0.6",
-    "MCP_DOCS_SERVER_TOOL_NAME": "searchMcpDocsServer",
-    "MCP_DOCS_SERVER_DOCS_PATH": "docs",
-    "MCP_DOCS_SERVER_PACKAGE_NAME": "@circlesac/mcp-docs-server"
-  },
   "base_dir": ".",
   "find_additional_modules": true,
   "rules": [

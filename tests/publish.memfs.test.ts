@@ -26,8 +26,8 @@ describe("publishDocs with in-memory filesystem", () => {
 			{
 				"/acme/mcp-docs-server.json": configContent,
 				"/acme/docs/index.md": docsIndex,
-				[templatePath]: templateContent,
-				[packageJsonPath]: packageJsonContent
+				"/package.json": packageJsonContent,
+				"/templates/docs.mdx": templateContent
 			},
 			"/"
 		)
@@ -118,6 +118,11 @@ describe("publishDocs with in-memory filesystem", () => {
 		}))
 
 		vi.doMock("node:fs/promises", () => ({ default: promises, ...promises }))
+		vi.doMock("node:fs", () => ({ default: memfs, ...memfs }))
+		vi.doMock("read-package-up", () => ({
+			readPackageUp: async () => ({ path: "/package.json", packageJson: JSON.parse(packageJsonContent) }),
+			readPackageUpSync: () => ({ path: "/package.json" })
+		}))
 		vi.doMock("node:child_process", () => ({ spawn: spawnMock }))
 
 		const { publishDocs } = await import("../src/commands/publish.js")

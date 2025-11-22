@@ -17,7 +17,7 @@ export interface PublishOptions {
 
 // Export publishDocs for backward compatibility (used by tests and bin script)
 export async function publishDocs(options: PublishOptions = {}): Promise<void> {
-	const config = await loadConfig(options)
+	const config = loadConfig(options)
 	const runtimeVersion = await readPackageVersion()
 	const packageDir = await preparePackageDirectory(config, options.outputDir)
 
