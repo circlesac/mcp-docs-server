@@ -33,9 +33,15 @@ Or add this configuration to your MCP server settings:
 
 ## Get started
 
-To get up and running quickly, start with the [Getting Started guide](docs/overview/getting-started.md). It walks through creating a minimal config, serving locally, publishing (including a no‑publish dry run), and how to add the published package as an MCP server in your coding agent.
+To get up and running quickly, start with the [Getting Started guide](docs/getting-started.md). It walks through the simple two-file setup and overview of all three deployment modes.
 
-For more depth, read the [Configuration](docs/overview/configuration.md) and [Publishing Workflow](docs/workflows/publish.md) guides. See the full doc index for more info: [docs/index.md](docs/index.md).
+### Three ways to serve your docs
+
+- **Local STDIO** - Use [`serve`](docs/commands/serve.md) for local development
+- **npm Package** - Use [`publish`](docs/commands/publish.md) to distribute via npm
+- **Cloudflare Worker** - Use [`cloudflare`](docs/commands/cloudflare.md) for remote deployment
+
+See the [Commands Overview](docs/commands/index.md) for a comparison and detailed guides. For configuration options, see the [Configuration Reference](docs/configuration.md). Full documentation: [docs/index.md](docs/index.md).
 
 ## Contributing
 

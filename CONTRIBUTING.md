@@ -31,7 +31,6 @@ Tests include filesystem-heavy scenarios (see `tests/publish.memfs.test.ts`) tha
 - `bun run build` – compiles `src/` with `tsconfig.build.json`
 - `bun run lint` – shared lint/format rules via `@circlesac/lint`
 - `bun run test` – Vitest with coverage (artifacts in `coverage/`)
-- `bun run coverage` – identical to `test` but convenient for CI artifact redirects
 
 ### Manual smoke checks
 
@@ -41,8 +40,11 @@ Tests include filesystem-heavy scenarios (see `tests/publish.memfs.test.ts`) tha
 2. Inspect publish output
    - `npx @circlesac/mcp-docs-server publish --output ./package-build` to stage the npm package locally.
    - Review `./package-build` (docs, config, wrapper) before publishing.
-3. Optional npm publish dry run
-   - `npm publish --access restricted --dry-run ./package-build` to verify metadata without pushing.
+3. Build Cloudflare Worker
+   - `npx @circlesac/mcp-docs-server cloudflare --dry-run` to prepare build directory without deploying.
+   - `npx @circlesac/mcp-docs-server cloudflare --account-id <id>` to build and deploy to Cloudflare.
+4. Optional npm publish dry run
+   - `cd ./package-build && npm publish --access restricted --dry-run` to verify metadata without pushing.
 
 ## Versioning & Releases
 

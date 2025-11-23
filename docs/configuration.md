@@ -35,3 +35,10 @@ The CLI intentionally keeps configuration minimal to reduce complexity and maint
 
 - **Can I keep multiple sections inside one package?** Yes. Arrange as many subfolders as you like under `docs/` (for example `docs/guides/`, `docs/reference/`).
 - **What if I need multiple top-level doc roots?** Create another package for each set. Keeping the config minimal is a feature—separate packages keep each doc collection focused and independently versioned.
+
+## Related Documentation
+
+- [Getting Started](./getting-started.md) - Learn how to set up your first docs server
+- [The `serve` Command](./commands/serve.md) - Use this config for local development
+- [The `publish` Command](./commands/publish.md) - Use this config when publishing to npm
+- [The `cloudflare` Command](./commands/cloudflare.md) - Use this config when deploying to Cloudflare

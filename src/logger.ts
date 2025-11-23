@@ -1,4 +1,4 @@
-import type { MCPServer } from "@mastra/mcp"
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { LoggingLevel } from "@modelcontextprotocol/sdk/types.js"
 
 export interface Logger {
@@ -34,7 +34,7 @@ function fallbackLog(level: LoggingLevel, message: string, data?: unknown) {
 	}
 }
 
-export function createLogger(server?: MCPServer): Logger {
+export function createLogger(server?: McpServer): Logger {
 	const sendLog = async (level: LoggingLevel, message: string, data?: unknown) => {
 		if (!server) {
 			fallbackLog(level, message, data)
@@ -42,13 +42,7 @@ export function createLogger(server?: MCPServer): Logger {
 		}
 
 		try {
-			const sdkServer = server.getServer()
-			if (!sdkServer) {
-				fallbackLog(level, message, data)
-				return
-			}
-
-			await sdkServer.sendLoggingMessage({
+			await server.sendLoggingMessage({
 				level,
 				data: {
 					message,

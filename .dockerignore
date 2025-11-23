@@ -1,0 +1,10 @@
+.build
+.cursor
+.git
+coverage
+dist
+node_modules
+*.log
+*.tgz
+worker-configuration.d.ts
+

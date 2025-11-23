@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 
-import { runServer } from "./index.js"
+import { handleCloudflare } from "./commands/cloudflare.js"
+import { publishDocs } from "./commands/publish.js"
+import { runServer } from "./commands/serve.js"
 import { logger } from "./logger.js"
-import { publishDocs } from "./publish.js"
-import { fromPackageRoot } from "./utils.js"
-
-const PACKAGE_CONFIG_PATH = fromPackageRoot("mcp-docs-server.json")
 
 async function printUsage(): Promise<void> {
 	await logger.info(`Usage: npx @circlesac/mcp-docs-server [command]
@@ -13,12 +11,16 @@ async function printUsage(): Promise<void> {
 Commands:
   serve      Start the MCP docs server from the current directory
   publish    Package the documentation (publishes to npm by default)
+  cloudflare Build Cloudflare Worker for remote MCP server
   help       Show this message
 
 Options:
-  serve --config <path>   Path to mcp-docs-server.json (default: ./mcp-docs-server.json)
-  serve --docs <path>     Path to docs directory (overrides config file)
-  publish --output <dir>  Stage the npm package in <dir> instead of publishing`)
+  serve --config <path>      Path to mcp-docs-server.json (default: ./mcp-docs-server.json)
+  serve --docs <path>        Path to docs directory (overrides config file)
+  publish --output <dir>     Stage the npm package in <dir> instead of publishing
+  cloudflare --output <dir>  Override output directory (default: .build/cloudflare/)
+  cloudflare --dry-run       Prepare build directory without running build
+  cloudflare --account-id <id>  Cloudflare account ID for deployment`)
 }
 
 function parseServeArgs(args: string[]): { configPath?: string; docs?: string } {
@@ -68,6 +70,35 @@ function parsePublishArgs(args: string[]): { outputDir?: string } {
 	return options
 }
 
+function parseCloudflareArgs(args: string[]): { outputDir?: string; dryRun?: boolean; accountId?: string } {
+	const options: { outputDir?: string; dryRun?: boolean; accountId?: string } = {}
+
+	for (let i = 0; i < args.length; i += 1) {
+		const token = args[i]
+		if (token === "--output" || token === "-o") {
+			const next = args[i + 1]
+			if (!next) {
+				throw new Error("--output option requires a directory path")
+			}
+			i += 1
+			options.outputDir = next
+		} else if (token === "--dry-run") {
+			options.dryRun = true
+		} else if (token === "--account-id") {
+			const next = args[i + 1]
+			if (!next) {
+				throw new Error("--account-id option requires an account ID")
+			}
+			i += 1
+			options.accountId = next
+		} else {
+			throw new Error(`Unknown option for cloudflare: ${token}`)
+		}
+	}
+
+	return options
+}
+
 async function main() {
 	const args = process.argv.slice(2)
 	const command = args[0]?.toLowerCase()
@@ -75,7 +106,8 @@ async function main() {
 	try {
 		switch (command) {
 			case undefined:
-				await runServer({ configPath: PACKAGE_CONFIG_PATH })
+				// Default: serve from current working directory
+				await runServer()
 				break
 			case "serve": {
 				const options = parseServeArgs(args.slice(1))
@@ -84,7 +116,12 @@ async function main() {
 			}
 			case "publish": {
 				const options = parsePublishArgs(args.slice(1))
-				await publishDocs({ outputDir: options.outputDir })
+				await publishDocs(options)
+				break
+			}
+			case "cloudflare": {
+				const options = parseCloudflareArgs(args.slice(1))
+				await handleCloudflare(options)
 				break
 			}
 			case "help":

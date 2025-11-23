@@ -1,13 +1,15 @@
 import fs from "node:fs/promises"
-import path, { dirname } from "node:path"
-import { fileURLToPath } from "node:url"
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
+import path from "node:path"
 
 const mdFileCache = new Map<string, string[]>()
 
-export function fromPackageRoot(...segments: string[]): string {
-	return path.resolve(__dirname, "..", ...segments)
+export function fromPackageRoot(baseDir: string, ...segments: string[]): string {
+	return path.resolve(baseDir, ...segments)
+}
+
+export function sanitizePackageDirName(packageName: string): string {
+	const sanitized = packageName.replace(/[^a-zA-Z0-9.-]+/g, "-").replace(/^-+|-+$/g, "")
+	return sanitized || "docs"
 }
 
 export async function* walkMdFiles(dir: string): AsyncGenerator<string> {

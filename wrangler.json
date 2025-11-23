@@ -1,0 +1,29 @@
+{
+  "name": "mcp-docs-server",
+  "main": "./src/cloudflare.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "enable_nodejs_fs_module"],
+  "migrations": [
+    {
+      "new_sqlite_classes": ["DocsMCP"],
+      "tag": "v1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "DocsMCP",
+        "name": "MCP_OBJECT"
+      }
+    ]
+  },
+  "base_dir": ".",
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["docs/**/*.md", "templates/**/*.mdx", "mcp-docs-server.json"],
+      "fallthrough": true
+    }
+  ]
+}
