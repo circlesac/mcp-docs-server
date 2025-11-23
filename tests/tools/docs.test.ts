@@ -45,17 +45,17 @@ describe("generic docs tool", () => {
 	})
 
 	it("lists directory contents and aggregates files", async () => {
-		const result = await docsTool.cb({ paths: ["overview"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["commands"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
-		expect(textContent).toContain("Directory contents of overview")
-		expect(textContent).toContain("- docs/overview/")
+		expect(textContent).toContain("Directory contents of commands")
+		expect(textContent).toContain("- docs/commands/")
 	})
 
 	it("suggests related files when the path is unknown", async () => {
-		const result = await docsTool.cb({ paths: ["unknown/path"], queryKeywords: ["overview"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["unknown/path"], queryKeywords: ["commands"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain('Path "unknown/path" not found')
-		expect(textContent).toMatch(/overview/)
+		expect(textContent).toMatch(/commands/)
 	})
 
 	it("rejects path traversal attempts", async () => {
@@ -65,15 +65,15 @@ describe("generic docs tool", () => {
 	})
 
 	it("serves nested content", async () => {
-		const result = await docsTool.cb({ paths: ["overview/getting-started.md"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["getting-started.md"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("getting-started")
 	})
 
 	it("handles multiple paths in one request", async () => {
-		const result = await docsTool.cb({ paths: ["index.md", "overview/configuration.md"] }, emptyExtra)
+		const result = await docsTool.cb({ paths: ["index.md", "configuration.md"] }, emptyExtra)
 		const textContent = result.content[0]?.type === "text" ? result.content[0].text : ""
 		expect(textContent).toContain("## index.md")
-		expect(textContent).toContain("## overview/configuration.md")
+		expect(textContent).toContain("## configuration.md")
 	})
 })
