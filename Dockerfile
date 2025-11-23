@@ -1,8 +1,9 @@
 FROM node:lts-slim
 
 # Base setup
-RUN npm install -g bun@1.3.1
-RUN apt-get update && apt-get install -y procps curl net-tools && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y procps curl net-tools unzip && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
 
 # Build npm package (workspace)
 WORKDIR /workspace
