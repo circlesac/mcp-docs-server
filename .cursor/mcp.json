@@ -2,7 +2,7 @@
   "mcpServers": {
     "local-stdio": {
       "command": "bun",
-      "args": ["/Users/ygpark80/Projects/mcp-docs-server/src/cli.ts", "serve"],
+      "args": ["./src/cli.ts", "serve"],
       "enabled": false
     },
     "docker-stdio": {
