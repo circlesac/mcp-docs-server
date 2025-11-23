@@ -1,54 +1,34 @@
-# Dockerfile for testing the npm package locally
-# Use Debian-based image for better compatibility with Cloudflare workerd
 FROM node:lts-slim
 
-# Install bun and npm
+# Base setup
 RUN npm install -g bun@1.3.1
+RUN apt-get update && apt-get install -y procps curl net-tools && rm -rf /var/lib/apt/lists/*
 
-# Install common utilities (ps, curl, pkill, etc.)
-RUN apt-get update && apt-get install -y \
-    procps \
-    curl \
-    net-tools \
-    && rm -rf /var/lib/apt/lists/*
-
+# Build npm package (workspace)
 WORKDIR /workspace
-
-# Copy all necessary files (exclusions in .dockerignore)
 COPY . .
-
-# Install dependencies
 RUN bun install
-
-# Generate worker-configuration.d.ts using wrangler types
 RUN npx wrangler types
-
-# Build the package
 RUN bun run build
-
-# Create npm pack tarball
-RUN npm pack && TARBALL=$(ls *.tgz | head -1) && echo "Created: $TARBALL" && mv $TARBALL /workspace/package.tgz
-
-# Install the package globally so npx can find it from any directory
+RUN npm pack && TARBALL=$(ls *.tgz | head -1) && mv $TARBALL /workspace/package.tgz
 RUN npm install -g /workspace/package.tgz
+RUN npx @circlesac/mcp-docs-server --help || true
+RUN timeout 2 npx @circlesac/mcp-docs-server serve || true
+RUN npx @circlesac/mcp-docs-server cloudflare --dry-run || true
 
-# Create a test project directory (without package.json) to simulate real usage
-WORKDIR /acme-docs
-RUN mkdir -p /acme-docs
-
-# Copy docs and config for testing
+# Setup mcp-docs-server
+WORKDIR /mcp-docs-server
 COPY docs ./docs
 COPY mcp-docs-server.json ./
 
-# Test that the CLI works
-RUN npx @circlesac/mcp-docs-server --help || true
+# Publish test-mcp-docs-server package
+RUN node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('mcp-docs-server.json'));c.package='test-mcp-docs-server';fs.writeFileSync('mcp-docs-server.json',JSON.stringify(c))"
+RUN npx @circlesac/mcp-docs-server publish --output /tmp/test-mcp-docs-server-package
+RUN npm pack /tmp/test-mcp-docs-server-package && TARBALL=$(ls test-mcp-docs-server-*.tgz | head -1) && mv $TARBALL /workspace/test-mcp-docs-server.tgz
+RUN npm install -g /workspace/test-mcp-docs-server.tgz
+RUN timeout 2 npx test-mcp-docs-server || true
 
-# Test serve command (should work with copied content)
-RUN timeout 2 npx @circlesac/mcp-docs-server serve || true
+# Pre-build Cloudflare Worker for faster tests (save to /tmp to avoid volume mount override)
+RUN npx @circlesac/mcp-docs-server cloudflare --dry-run --output /tmp/cloudflare-build || true
 
-# Test cloudflare command (dry-run)
-RUN npx @circlesac/mcp-docs-server cloudflare --dry-run || true
-
-# Keep container running for interactive testing
 CMD ["sh"]
-

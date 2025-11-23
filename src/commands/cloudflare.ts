@@ -61,11 +61,6 @@ export async function handleCloudflare(options: CloudflareOptions = {}): Promise
 	// Generate wrangler.json with worker name
 	await generateWranglerConfig(config, buildDir, options.accountId)
 
-	if (options.dryRun) {
-		console.info(`Dry run complete. Build directory prepared at ${buildDir}`)
-		return
-	}
-
 	// Install dependencies
 	console.info("Installing dependencies...")
 	await runNpmInstall(buildDir)
@@ -73,6 +68,11 @@ export async function handleCloudflare(options: CloudflareOptions = {}): Promise
 	// Generate TypeScript types
 	console.info("Generating TypeScript types...")
 	await runWranglerTypes(buildDir)
+
+	if (options.dryRun) {
+		console.info(`Dry run complete. Build directory prepared at ${buildDir}`)
+		return
+	}
 
 	// Deploy to Cloudflare
 	console.info("Deploying Cloudflare Worker...")

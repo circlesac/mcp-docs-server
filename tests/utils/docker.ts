@@ -4,7 +4,7 @@ import { promisify } from "node:util"
 
 const execAsync = promisify(exec)
 
-const DOCKER_IMAGE = "mcp-docs-server-test"
+const DOCKER_IMAGE = "mcp-docs-server"
 
 export async function dockerExec(command: string, containerName: string): Promise<string> {
 	return new Promise((resolve, reject) => {

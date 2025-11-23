@@ -1,6 +1,6 @@
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
@@ -10,14 +10,6 @@ import { buildDockerImage, dockerExec, localSpawn, startContainer, stopContainer
 
 const STDIO_CONTAINER = "mcp-docs-server-stdio-test"
 const REMOTE_CONTAINER = "mcp-docs-server-remote-test"
-
-// Get the test fixtures directory
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const FIXTURES_DIR = path.join(__dirname, "__fixtures__", "acme")
-
-// Temporary test directory on host (will be created in beforeAll)
-let tempTestDir: string | null = null
 
 // Shared test logic for MCP server functionality
 async function testMcpServer(client: Client): Promise<void> {
@@ -59,7 +51,7 @@ async function testMcpServer(client: Client): Promise<void> {
 	const multiPathResult = await client.callTool({
 		name: tool.name,
 		arguments: {
-			paths: ["index.md", "company"]
+			paths: ["index.md", "overview"]
 		}
 	})
 
@@ -71,7 +63,7 @@ async function testMcpServer(client: Client): Promise<void> {
 	const multiTextContent = multiContent[0]
 	if (multiTextContent && multiTextContent.type === "text" && multiTextContent.text) {
 		expect(multiTextContent.text).toContain("## index.md")
-		expect(multiTextContent.text).toContain("## company")
+		expect(multiTextContent.text).toContain("## overview")
 	}
 
 	// Test 5: Call tool with query keywords
@@ -79,7 +71,7 @@ async function testMcpServer(client: Client): Promise<void> {
 		name: tool.name,
 		arguments: {
 			paths: ["index.md"],
-			queryKeywords: ["acme", "documentation"]
+			queryKeywords: ["mcp", "documentation"]
 		}
 	})
 
@@ -109,31 +101,35 @@ async function testMcpServer(client: Client): Promise<void> {
 }
 
 describe("MCP Server Tests", () => {
+	// Random temp build directory for remote tests (to avoid conflicts)
+	let tempBuildDir: string | null = null
+
 	beforeAll(async () => {
 		await buildDockerImage()
 		await startContainer(STDIO_CONTAINER)
 
-		// Create temporary test directory on host for remote tests
-		tempTestDir = path.join(process.cwd(), ".test-temp", "remote-mcp")
-		await fs.promises.mkdir(tempTestDir, { recursive: true })
+		// Create random temp build directory on host (mounted into Docker container)
+		tempBuildDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mcp-docs-server-test-"))
 
-		// Copy fixtures to temp directory
-		await fs.promises.cp(FIXTURES_DIR, tempTestDir, { recursive: true })
-
-		// Start container with volume mount for the test directory
+		// Start container - Docker image already has docs and config in /mcp-docs-server
+		// Mount temp build directory so we can access build output from host
 		await startContainer(REMOTE_CONTAINER, undefined, {
-			hostPath: tempTestDir,
-			containerPath: "/acme-docs"
+			hostPath: tempBuildDir,
+			containerPath: "/mcp-docs-server/.build"
 		})
+
+		// Copy pre-built Cloudflare Worker from /tmp (where Dockerfile saved it) to mounted volume
+		// This avoids running npm install and wrangler types during the test
+		await dockerExec("mkdir -p /mcp-docs-server/.build/cloudflare && cp -r /tmp/cloudflare-build/* /mcp-docs-server/.build/cloudflare/ 2>/dev/null || true", REMOTE_CONTAINER)
 	}, 120000)
 
 	afterAll(async () => {
 		await stopContainer(STDIO_CONTAINER)
 		await stopContainer(REMOTE_CONTAINER)
 
-		// Clean up temp directory
-		if (tempTestDir) {
-			await fs.promises.rm(tempTestDir, { recursive: true, force: true }).catch(() => {})
+		// Clean up temp build directory
+		if (tempBuildDir) {
+			await fs.promises.rm(tempBuildDir, { recursive: true, force: true }).catch(() => {})
 		}
 	}, 30000)
 
@@ -151,7 +147,7 @@ describe("MCP Server Tests", () => {
 
 			const transport = new StdioClientTransport({
 				command: "docker",
-				args: ["exec", "-i", STDIO_CONTAINER, "sh", "-c", "cd /acme-docs && npx @circlesac/mcp-docs-server serve"]
+				args: ["exec", "-i", STDIO_CONTAINER, "sh", "-c", "cd /mcp-docs-server && npx test-mcp-docs-server"]
 			})
 
 			await client.connect(transport)
@@ -160,29 +156,24 @@ describe("MCP Server Tests", () => {
 		}, 30000)
 	})
 
-	describe("remote transport (SSE)", () => {
+	describe("remote transport (streamable HTTP)", () => {
 		it("should connect, list tools, and call tools with various args", async () => {
-			if (!tempTestDir) {
-				throw new Error("tempTestDir not initialized")
+			if (!tempBuildDir) {
+				throw new Error("tempBuildDir not initialized")
 			}
 
-			// Step 1: Build the Cloudflare Worker in Docker (outputs to mounted volume)
-			await dockerExec("cd /acme-docs && npx @circlesac/mcp-docs-server cloudflare --dry-run", REMOTE_CONTAINER)
-			await dockerExec("cd /acme-docs/.build/cloudflare && npm install", REMOTE_CONTAINER)
-			await dockerExec("cd /acme-docs/.build/cloudflare && npx wrangler types", REMOTE_CONTAINER)
-
-			// Step 2: Run wrangler dev locally (not in Docker)
-			const buildDir = path.join(tempTestDir, ".build", "cloudflare")
+			// Step 1: Run wrangler dev locally from pre-built directory (already built in Dockerfile)
+			const buildDir = path.join(tempBuildDir, "cloudflare")
 			const { process: wranglerProc, output: wranglerOutput } = await localSpawn("npx wrangler dev --port 8787", buildDir)
 
 			// Step 3: Wait for server to be ready
 			let serverReady = false
 
-			// Wait up to 40 seconds for server to respond
-			for (let i = 0; i < 40; i++) {
+			// Wait up to 20 seconds for server to respond (reduced from 40 since it usually responds quickly)
+			for (let i = 0; i < 20; i++) {
 				try {
 					const controller = new AbortController()
-					const timeoutId = setTimeout(() => controller.abort(), 3000)
+					const timeoutId = setTimeout(() => controller.abort(), 2000)
 
 					const response = await fetch("http://localhost:8787/mcp", {
 						method: "GET",
@@ -195,14 +186,14 @@ describe("MCP Server Tests", () => {
 					// eslint-disable-next-line no-console
 					console.log(`✓ Server responded with status ${response.status} on attempt ${i + 1}`)
 					// Give it a moment to fully initialize
-					await new Promise((resolve) => setTimeout(resolve, 2000))
+					await new Promise((resolve) => setTimeout(resolve, 1000))
 					serverReady = true
 					break
 				} catch (_error) {
 					// eslint-disable-next-line no-console
-					if (i % 10 === 0) console.log(`Waiting for server... attempt ${i + 1}/40`)
+					if (i % 5 === 0) console.log(`Waiting for server... attempt ${i + 1}/20`)
 				}
-				await new Promise((resolve) => setTimeout(resolve, 1000))
+				await new Promise((resolve) => setTimeout(resolve, 500))
 			}
 
 			if (!serverReady) {

@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 import { publishDocs } from "../../src/commands/publish.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const fixtureRoot = path.resolve(__dirname, "..", "__fixtures__", "acme")
-const configPath = path.join(fixtureRoot, "mcp-docs-server.json")
+const repoRoot = path.resolve(__dirname, "..", "..")
+const configPath = path.join(repoRoot, "mcp-docs-server.json")
 
 const { spawnMock } = vi.hoisted(() => {
 	return {
@@ -63,7 +63,7 @@ describe("publishDocs", () => {
 			bin?: string
 			description?: string
 		}
-		expect(generatedPackageJson.name).toBe("@acme/mcp-docs")
+		expect(generatedPackageJson.name).toBe("@circlesac/mcp-docs-server")
 		expect(generatedPackageJson.files).toEqual(expect.arrayContaining(["bin", "docs", "mcp-docs-server.json"]))
 		expect(generatedPackageJson.dependencies?.["@circlesac/mcp-docs-server"]).toBeDefined()
 		expect(generatedPackageJson.bin).toBe("bin/stdio.js")
@@ -77,7 +77,7 @@ describe("publishDocs", () => {
 	})
 
 	it("stages package in output directory when requested", async () => {
-		const outputDir = path.join(__dirname, "__fixtures__", "staged-package")
+		const outputDir = path.join(__dirname, "staged-package")
 
 		try {
 			await publishDocs({ configPath, outputDir })
@@ -90,7 +90,7 @@ describe("publishDocs", () => {
 				bin?: string
 				description?: string
 			}
-			expect(stagedPackageJson.name).toBe("@acme/mcp-docs")
+			expect(stagedPackageJson.name).toBe("@circlesac/mcp-docs-server")
 			expect(stagedPackageJson.files).toEqual(expect.arrayContaining(["bin", "docs", "mcp-docs-server.json"]))
 			expect(stagedPackageJson.bin).toBe("bin/stdio.js")
 			expect(stagedPackageJson.description).toBeUndefined()

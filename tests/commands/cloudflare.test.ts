@@ -15,7 +15,7 @@ describe("Cloudflare command tests", () => {
 	}, 30000)
 
 	it("should have the package installed", async () => {
-		const result = await dockerExec("cd /acme-docs && npx @circlesac/mcp-docs-server --help", REMOTE_CONTAINER)
+		const result = await dockerExec("cd /mcp-docs-server && npx @circlesac/mcp-docs-server --help", REMOTE_CONTAINER)
 		expect(result).toContain("Usage:")
 		expect(result).toContain("serve")
 		expect(result).toContain("publish")
@@ -23,25 +23,19 @@ describe("Cloudflare command tests", () => {
 	})
 
 	it("should build Cloudflare Worker and run wrangler types", async () => {
-		// Run cloudflare command with dry-run
-		await dockerExec("cd /acme-docs && npx @circlesac/mcp-docs-server cloudflare --dry-run", REMOTE_CONTAINER)
-
-		// Install dependencies
-		await dockerExec("cd /acme-docs/.build/cloudflare && npm install", REMOTE_CONTAINER)
-
-		// Run wrangler types to generate worker-configuration.d.ts
-		await dockerExec("cd /acme-docs/.build/cloudflare && npx wrangler types", REMOTE_CONTAINER)
+		// Run cloudflare command with dry-run (now includes npm install and wrangler types)
+		await dockerExec("cd /mcp-docs-server && npx @circlesac/mcp-docs-server cloudflare --dry-run", REMOTE_CONTAINER)
 
 		// Verify types file was generated
-		const typesCheck = await dockerExec("test -f /acme-docs/.build/cloudflare/worker-configuration.d.ts && echo 'exists' || echo 'missing'", REMOTE_CONTAINER)
+		const typesCheck = await dockerExec("test -f /mcp-docs-server/.build/cloudflare/worker-configuration.d.ts && echo 'exists' || echo 'missing'", REMOTE_CONTAINER)
 		expect(typesCheck.trim()).toBe("exists")
 
 		// Verify wrangler.json exists
-		const wranglerCheck = await dockerExec("test -f /acme-docs/.build/cloudflare/wrangler.json && echo 'exists' || echo 'missing'", REMOTE_CONTAINER)
+		const wranglerCheck = await dockerExec("test -f /mcp-docs-server/.build/cloudflare/wrangler.json && echo 'exists' || echo 'missing'", REMOTE_CONTAINER)
 		expect(wranglerCheck.trim()).toBe("exists")
 
 		// Verify source files are copied
-		const srcCheck = await dockerExec("test -d /acme-docs/.build/cloudflare/src && echo 'exists' || echo 'missing'", REMOTE_CONTAINER)
+		const srcCheck = await dockerExec("test -d /mcp-docs-server/.build/cloudflare/src && echo 'exists' || echo 'missing'", REMOTE_CONTAINER)
 		expect(srcCheck.trim()).toBe("exists")
 	}, 60000)
 })

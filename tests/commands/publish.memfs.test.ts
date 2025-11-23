@@ -23,9 +23,9 @@ describe("publishDocs with in-memory filesystem", () => {
 	it("writes expected package artifacts", async () => {
 		const realFs = await import("node:fs/promises")
 
-		const fixtureRoot = path.resolve(__dirname, "..", "__fixtures__", "acme")
-		const configContent = await realFs.readFile(path.join(fixtureRoot, "mcp-docs-server.json"), "utf-8")
-		const docsIndex = await realFs.readFile(path.join(fixtureRoot, "docs", "index.md"), "utf-8")
+		const repoRoot = path.resolve(__dirname, "..", "..")
+		const configContent = await realFs.readFile(path.join(repoRoot, "mcp-docs-server.json"), "utf-8")
+		const docsIndex = await realFs.readFile(path.join(repoRoot, "docs", "index.md"), "utf-8")
 		const templatePath = fromPackageRoot("templates", "docs.mdx")
 		const templateContent = await realFs.readFile(templatePath, "utf-8")
 		const packageJsonPath = fromPackageRoot("package.json")
