@@ -1,6 +1,6 @@
 {
   "name": "@circlesac/mcp-docs-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Simple CLI for serving Markdown docs as an MCP server and packaging them for npm.",
   "type": "module",
   "main": "./dist/index.js",
@@ -29,7 +29,8 @@
   "packageManager": "bun@1.3.1",
   "dependencies": {
     "agents": "^0.2.23",
-    "read-package-up": "^12.0.0"
+    "read-package-up": "^12.0.0",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.10.10",

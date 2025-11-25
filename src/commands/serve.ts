@@ -6,6 +6,7 @@ import { readPackageUpSync } from "read-package-up"
 
 import { CONFIG_FILENAME, loadConfig } from "../config.js"
 import { createLogger, logger } from "../logger.js"
+import { registerPrompts } from "../prompts/index.js"
 import { createDocsTool } from "../tools/docs.js"
 
 export interface RunServerOptions {
@@ -52,6 +53,9 @@ async function createServer(config: Awaited<ReturnType<typeof loadConfig>>): Pro
 	})
 
 	server.registerTool(docsTool.name, docsTool.config, docsTool.cb)
+
+	// Register prompts if prompts directory exists
+	await registerPrompts(server, config)
 
 	Object.assign(logger, createLogger(server))
 

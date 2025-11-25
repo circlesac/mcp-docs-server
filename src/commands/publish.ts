@@ -6,6 +6,7 @@ import { readPackageUpSync } from "read-package-up"
 
 import type { DocsServerConfig } from "../config.js"
 import { CONFIG_FILENAME, loadConfig } from "../config.js"
+import { promptsDirectoryExists } from "../prompts/loader.js"
 import { sanitizePackageDirName } from "../utils.js"
 
 const SCRIPT_BASENAME = "stdio.js"
@@ -42,6 +43,7 @@ export async function publishDocs(options: PublishOptions = {}): Promise<void> {
 	await fs.mkdir(packageDir, { recursive: true })
 
 	await copyDocRoots(config, packageDir)
+	await copyPrompts(config, packageDir)
 	await copyConfigFile(config, packageDir)
 	await copyNpmrcIfPresent(config, packageDir)
 	await writeBinScript(config, packageDir)
@@ -78,6 +80,14 @@ async function copyDocRoots(config: DocsServerConfig, destination: string): Prom
 	const targetDir = path.join(destination, config.docRoot.relativePath)
 	await fs.mkdir(path.dirname(targetDir), { recursive: true })
 	await fs.cp(config.docRoot.absolutePath, targetDir, { recursive: true, force: true })
+}
+
+async function copyPrompts(config: DocsServerConfig, destination: string): Promise<void> {
+	if (await promptsDirectoryExists(config.rootDir)) {
+		const sourcePath = path.join(config.rootDir, "prompts")
+		const targetPath = path.join(destination, "prompts")
+		await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
+	}
 }
 
 async function copyConfigFile(config: DocsServerConfig, destination: string): Promise<void> {
@@ -117,6 +127,10 @@ await runServer({ configPath })
 
 async function writePackageJson(config: DocsServerConfig, destination: string): Promise<void> {
 	const files = new Set<string>(["bin", path.basename(config.configPath), config.docRoot.relativePath])
+	// Add prompts directory if it exists
+	if (await promptsDirectoryExists(config.rootDir)) {
+		files.add("prompts")
+	}
 
 	const pkgJson = {
 		name: config.packageName,
