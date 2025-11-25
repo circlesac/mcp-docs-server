@@ -6,6 +6,7 @@ import { readPackageUp, readPackageUpSync } from "read-package-up"
 
 import type { DocsServerConfig } from "../config.js"
 import { CONFIG_FILENAME, loadConfig } from "../config.js"
+import { promptsDirectoryExists } from "../prompts/loader.js"
 import { sanitizePackageDirName } from "../utils.js"
 
 export interface CloudflareOptions {
@@ -42,6 +43,9 @@ export async function handleCloudflare(options: CloudflareOptions = {}): Promise
 
 	// Copy user's docs
 	await copyDocs(config, buildDir)
+
+	// Copy prompts directory if it exists
+	await copyPrompts(config, buildDir)
 
 	// Copy config file (use the resolved configPath from above)
 	await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
@@ -109,6 +113,24 @@ async function copySourceFiles(packageRoot: string, buildDir: string): Promise<v
 		const targetPath = path.join(buildDir, "src", file)
 		await fs.mkdir(path.dirname(targetPath), { recursive: true })
 		await fs.cp(sourcePath, targetPath, { force: true })
+	}
+
+	// Copy prompts directory if it exists in source
+	const promptsSourcePath = path.join(packageRoot, "src", "prompts")
+	const promptsTargetPath = path.join(buildDir, "src", "prompts")
+	try {
+		await fs.access(promptsSourcePath)
+		await fs.cp(promptsSourcePath, promptsTargetPath, { recursive: true, force: true })
+	} catch {
+		// Prompts directory doesn't exist in source, skip
+	}
+}
+
+async function copyPrompts(config: DocsServerConfig, buildDir: string): Promise<void> {
+	if (await promptsDirectoryExists(config.rootDir)) {
+		const sourcePath = path.join(config.rootDir, "prompts")
+		const targetPath = path.join(buildDir, "prompts")
+		await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
 	}
 }
 

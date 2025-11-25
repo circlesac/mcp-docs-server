@@ -7,7 +7,7 @@
 1. **`docs/`** - A directory containing your Markdown files
 2. **`mcp-docs-server.json`** - A minimal configuration file
 
-That's all you need to get started.
+That's all you need to get started. Optionally, you can also add a `prompts/` directory to create reusable prompt templates (see [Prompts](./prompts.md)).
 
 ## Quick Setup
 
@@ -21,6 +21,8 @@ That's all you need to get started.
    │   │   └── intro.md
    │   └── reference/
    │       └── api.md
+   ├── prompts/          # Optional: prompt templates
+   │   └── setup-guide.md
    └── mcp-docs-server.json
    ```
 
@@ -78,5 +80,6 @@ The `mcp-docs-server.json` file is simple. See the [Configuration Reference](./c
 ## Next Steps
 
 - Learn about [configuration options](./configuration.md)
+- Create [reusable prompt templates](./prompts.md) for common tasks
 - Explore the [command documentation](./commands/serve.md) for detailed usage
 - Check out the [full documentation index](./index.md)

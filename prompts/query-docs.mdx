@@ -1,0 +1,25 @@
+---
+title: Query Documentation
+description: Help users effectively query and navigate the documentation using the searchDocs tool
+args:
+  topic:
+    type: string
+    required: true
+    description: The topic or subject you want to learn about (e.g., "cloudflare deployment", "configuration", "getting started")
+  context:
+    type: string
+    optional: true
+    description: Additional context about what you're trying to accomplish or any specific questions you have
+---
+
+I need help finding information about {{topic}} in the documentation.
+
+Please use the searchDocs tool to:
+1. Find relevant documentation paths related to {{topic}}
+2. Load the most relevant documentation files
+3. Provide a clear explanation based on the documentation
+
+{{context}}
+
+Start by searching for documentation related to "{{topic}}".
+

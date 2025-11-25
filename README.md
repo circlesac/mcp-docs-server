@@ -4,7 +4,7 @@
 
 Have Markdown files (knowledge) you want to share across workspaces or your company? Run them as an MCP docs server so agents can answer directly from your content.
 
-Make your Markdown docs feel alive in coding agents like Cursor and Claude. When you’re ready to roll it out to your team, publish as an npm package for consistent installs—everyone gets the same version with zero extra setup.
+Make your Markdown docs feel alive in coding agents like Cursor and Claude. Add reusable prompt templates to guide users through common workflows. When you're ready to roll it out to your team, publish as an npm package for consistent installs—everyone gets the same version with zero extra setup.
 
 > Inspired by Mastra’s excellent [Mastra Docs Server](https://mastra.ai/docs/getting-started/mcp-docs-server), which shows how powerful doc-focused MCP servers can be.
 
@@ -41,7 +41,7 @@ To get up and running quickly, start with the [Getting Started guide](docs/getti
 - **npm Package** - Use [`publish`](docs/commands/publish.md) to distribute via npm
 - **Cloudflare Worker** - Use [`cloudflare`](docs/commands/cloudflare.md) for remote deployment
 
-See the [Commands Overview](docs/commands/index.md) for a comparison and detailed guides. For configuration options, see the [Configuration Reference](docs/configuration.md). Full documentation: [docs/index.md](docs/index.md).
+See the [Commands Overview](docs/commands/index.md) for a comparison and detailed guides. For configuration options, see the [Configuration Reference](docs/configuration.md). Learn how to create [reusable prompt templates](docs/prompts.md) for common workflows. Full documentation: [docs/index.md](docs/index.md).
 
 ## Contributing
 
