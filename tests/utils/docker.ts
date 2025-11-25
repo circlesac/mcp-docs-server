@@ -92,8 +92,7 @@ export async function buildDockerImage(): Promise<void> {
 		if (stderr && !stderr.toString().includes("WARNING")) {
 			console.warn(`Docker build stderr: ${stderr}`)
 		}
-		// eslint-disable-next-line no-console
-		console.log("Docker image built successfully")
+		console.info("Docker image built successfully")
 	} catch (error: unknown) {
 		const err = error as { stdout?: string; stderr?: string }
 		throw new Error(`Docker build failed: ${err.stderr || err.stdout || String(error)}`)
@@ -123,8 +122,7 @@ export async function startContainer(containerName: string, portMapping?: string
 		if (stderr && !stderr.toString().includes("WARNING")) {
 			console.warn(`Docker run stderr: ${stderr}`)
 		}
-		// eslint-disable-next-line no-console
-		console.log(`Docker container ${containerName} started`)
+		console.info(`Docker container ${containerName} started`)
 	} catch (error: unknown) {
 		const err = error as { stdout?: string; stderr?: string }
 		throw new Error(`Docker run failed: ${err.stderr || err.stdout || String(error)}`)
@@ -134,8 +132,7 @@ export async function startContainer(containerName: string, portMapping?: string
 export async function stopContainer(containerName: string): Promise<void> {
 	await execAsync(`docker stop ${containerName} 2>/dev/null || true`).catch(() => {})
 	await execAsync(`docker rm ${containerName} 2>/dev/null || true`).catch(() => {})
-	// eslint-disable-next-line no-console
-	console.log(`Docker container ${containerName} stopped and removed`)
+	console.info(`Docker container ${containerName} stopped and removed`)
 }
 
 /**
@@ -175,4 +172,34 @@ export async function localSpawn(
 
 		resolve({ process: proc, output: outputPromise })
 	})
+}
+
+/**
+ * Kill any process using the specified port
+ */
+export async function killProcessOnPort(port: number): Promise<void> {
+	try {
+		// Use lsof to find process using the port (works on macOS and Linux)
+		const { stdout } = await execAsync(`lsof -ti:${port}`)
+		const pids = stdout
+			.trim()
+			.split("\n")
+			.filter((pid) => pid.length > 0)
+
+		if (pids.length > 0) {
+			console.info(`Killing processes on port ${port}: ${pids.join(", ")}`)
+			// Kill all processes using this port
+			for (const pid of pids) {
+				try {
+					await execAsync(`kill -9 ${pid}`)
+				} catch {
+					// Process may have already terminated, ignore
+				}
+			}
+			// Give processes time to terminate
+			await new Promise((resolve) => setTimeout(resolve, 500))
+		}
+	} catch {
+		// No process using the port, which is fine
+	}
 }

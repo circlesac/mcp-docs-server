@@ -6,7 +6,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { buildDockerImage, dockerExec, localSpawn, startContainer, stopContainer } from "./utils/docker.js"
+import { buildDockerImage, dockerExec, killProcessOnPort, localSpawn, startContainer, stopContainer } from "./utils/docker.js"
 
 const STDIO_CONTAINER = "mcp-docs-server-stdio-test"
 const REMOTE_CONTAINER = "mcp-docs-server-remote-test"
@@ -162,6 +162,9 @@ describe("MCP Server Tests", () => {
 				throw new Error("tempBuildDir not initialized")
 			}
 
+			// Step 0: Kill any process using port 8787 to ensure clean start
+			await killProcessOnPort(8787)
+
 			// Step 1: Run wrangler dev locally from pre-built directory (already built in Dockerfile)
 			const buildDir = path.join(tempBuildDir, "cloudflare")
 			const { process: wranglerProc, output: wranglerOutput } = await localSpawn("npx wrangler dev --port 8787", buildDir)
@@ -183,15 +186,13 @@ describe("MCP Server Tests", () => {
 					clearTimeout(timeoutId)
 
 					// Any response (even error) means server is up and responding
-					// eslint-disable-next-line no-console
-					console.log(`✓ Server responded with status ${response.status} on attempt ${i + 1}`)
+					console.info(`✓ Server responded with status ${response.status} on attempt ${i + 1}`)
 					// Give it a moment to fully initialize
 					await new Promise((resolve) => setTimeout(resolve, 1000))
 					serverReady = true
 					break
 				} catch (_error) {
-					// eslint-disable-next-line no-console
-					if (i % 5 === 0) console.log(`Waiting for server... attempt ${i + 1}/20`)
+					if (i % 5 === 0) console.info(`Waiting for server... attempt ${i + 1}/20`)
 				}
 				await new Promise((resolve) => setTimeout(resolve, 500))
 			}
@@ -233,10 +234,11 @@ describe("MCP Server Tests", () => {
 				wranglerProc.kill("SIGTERM")
 				const wranglerLogs = await wranglerOutput.catch(() => "")
 				if (wranglerLogs) {
-					// eslint-disable-next-line no-console
-					console.log("Wrangler dev output:", wranglerLogs)
+					console.info("Wrangler dev output:", wranglerLogs)
 				}
 				await new Promise((resolve) => setTimeout(resolve, 2000))
+				// Ensure port is clean for next test run
+				await killProcessOnPort(8787)
 			}
 		}, 90000)
 	})

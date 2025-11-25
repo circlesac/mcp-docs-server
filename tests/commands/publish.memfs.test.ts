@@ -108,13 +108,12 @@ describe("publishDocs with in-memory filesystem", () => {
 			}
 		}
 
-		const mkdtemp: FsPromises["mkdtemp"] = async (prefix, _options) => {
+		// Type assertion needed because memfs mkdtemp returns string but FsPromises expects Buffer in some overloads
+		const mkdtemp = (async (prefix: string, _options?: Parameters<FsPromises["mkdtemp"]>[1]) => {
 			const unique = `${prefix}${Math.random().toString(16).slice(2)}`
 			await ensureDir(unique)
-			// Type assertion needed because memfs mkdtemp returns string but FsPromises expects Buffer in some overloads
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			return unique as any
-		}
+			return unique
+		}) as FsPromises["mkdtemp"]
 
 		const promises = Object.assign({}, basePromises, { cp, rm, mkdtemp, mkdir: ensureDir }) as unknown as FsPromises
 
