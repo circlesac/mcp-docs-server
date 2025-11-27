@@ -24,6 +24,11 @@
       "type": "Text",
       "globs": ["docs/**/*.md", "templates/**/*.mdx", "prompts/**/*.md", "prompts/**/*.mdx", "mcp-docs-server.json"],
       "fallthrough": true
+    },
+    {
+      "type": "Data",
+      "globs": ["resources/**/*"],
+      "fallthrough": true
     }
   ]
 }

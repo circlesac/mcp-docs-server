@@ -3,11 +3,11 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { readPackageUpSync } from "read-package-up"
-
-import type { DocsServerConfig } from "../config.js"
-import { CONFIG_FILENAME, loadConfig } from "../config.js"
-import { promptsDirectoryExists } from "../prompts/loader.js"
-import { sanitizePackageDirName } from "../utils.js"
+import { promptsDirectoryExists } from "../handlers/prompts.js"
+import { resourcesDirectoryExists } from "../handlers/resources.js"
+import type { DocsServerConfig } from "../utils/config.js"
+import { CONFIG_FILENAME, loadConfig } from "../utils/config.js"
+import { sanitizePackageDirName } from "../utils/index.js"
 
 const SCRIPT_BASENAME = "stdio.js"
 
@@ -44,6 +44,7 @@ export async function publishDocs(options: PublishOptions = {}): Promise<void> {
 
 	await copyDocRoots(config, packageDir)
 	await copyPrompts(config, packageDir)
+	await copyResources(config, packageDir)
 	await copyConfigFile(config, packageDir)
 	await copyNpmrcIfPresent(config, packageDir)
 	await writeBinScript(config, packageDir)
@@ -90,6 +91,14 @@ async function copyPrompts(config: DocsServerConfig, destination: string): Promi
 	}
 }
 
+async function copyResources(config: DocsServerConfig, destination: string): Promise<void> {
+	if (await resourcesDirectoryExists(config.rootDir)) {
+		const sourcePath = path.join(config.rootDir, "resources")
+		const targetPath = path.join(destination, "resources")
+		await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
+	}
+}
+
 async function copyConfigFile(config: DocsServerConfig, destination: string): Promise<void> {
 	await fs.copyFile(config.configPath, path.join(destination, path.basename(config.configPath)))
 }
@@ -130,6 +139,10 @@ async function writePackageJson(config: DocsServerConfig, destination: string): 
 	// Add prompts directory if it exists
 	if (await promptsDirectoryExists(config.rootDir)) {
 		files.add("prompts")
+	}
+	// Add resources directory if it exists
+	if (await resourcesDirectoryExists(config.rootDir)) {
+		files.add("resources")
 	}
 
 	const pkgJson = {

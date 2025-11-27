@@ -4,9 +4,8 @@ import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/proto
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js"
 import { readPackageUpSync } from "read-package-up"
 import { beforeAll, describe, expect, it } from "vitest"
-
-import { loadConfig } from "../../src/config.js"
 import { createDocsTool } from "../../src/tools/docs.js"
+import { loadConfig } from "../../src/utils/config.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, "..", "..")

@@ -4,9 +4,9 @@ import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/m
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 
-import type { DocRoot, DocsServerConfig } from "../config.js"
-import { logger } from "../logger.js"
-import { getMatchingPaths, normalizeDocPath } from "../utils.js"
+import type { DocRoot, DocsServerConfig } from "../utils/config.js"
+import { getMatchingPaths, normalizeDocPath } from "../utils/index.js"
+import { logger } from "../utils/logger.js"
 
 // Infer ToolDefinition type from registerTool signature
 type ToolDefinition = Parameters<McpServer["registerTool"]>[1]

@@ -3,11 +3,11 @@ import { fileURLToPath } from "node:url"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { readPackageUpSync } from "read-package-up"
-
-import { CONFIG_FILENAME, loadConfig } from "../config.js"
-import { createLogger, logger } from "../logger.js"
-import { registerPrompts } from "../prompts/index.js"
-import { createDocsTool } from "../tools/docs.js"
+import { registerPrompts } from "../handlers/prompts.js"
+import { registerResources } from "../handlers/resources.js"
+import { registerTools } from "../handlers/tools.js"
+import { CONFIG_FILENAME, loadConfig } from "../utils/config.js"
+import { createLogger, logger } from "../utils/logger.js"
 
 export interface RunServerOptions {
 	configPath?: string
@@ -45,17 +45,19 @@ export async function runServer(options: RunServerOptions = {}): Promise<void> {
 }
 
 async function createServer(config: Awaited<ReturnType<typeof loadConfig>>): Promise<McpServer> {
-	const docsTool = await createDocsTool(config)
-
 	const server = new McpServer({
 		name: config.name,
 		version: config.version
 	})
 
-	server.registerTool(docsTool.name, docsTool.config, docsTool.cb)
+	// Register tools
+	await registerTools(server, config)
 
 	// Register prompts if prompts directory exists
 	await registerPrompts(server, config)
+
+	// Register resources if resources directory exists
+	await registerResources(server, config)
 
 	Object.assign(logger, createLogger(server))
 

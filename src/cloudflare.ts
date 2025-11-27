@@ -1,8 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { McpAgent } from "agents/mcp"
-import { loadConfig } from "./config.js"
-import { registerPrompts } from "./prompts/index.js"
-import { createDocsTool } from "./tools/docs.js"
+import { registerPrompts } from "./handlers/prompts.js"
+import { registerResources } from "./handlers/resources.js"
+import { registerTools } from "./handlers/tools.js"
+import { loadConfig } from "./utils/config.js"
 
 // Load config from bundled mcp-docs-server.json at module level
 // Template is also bundled at /bundle/templates/docs.mdx
@@ -13,10 +14,12 @@ export class DocsMCP extends McpAgent<Env> {
 	server = new McpServer({ name: config.name, version: config.version })
 
 	async init() {
-		const docsTool = await createDocsTool(config)
-		this.server.registerTool(docsTool.name, docsTool.config, docsTool.cb)
+		// Register tools
+		await registerTools(this.server, config)
 		// Register prompts if prompts directory exists
 		await registerPrompts(this.server, config)
+		// Register resources if resources directory exists
+		await registerResources(this.server, config)
 	}
 }
 
