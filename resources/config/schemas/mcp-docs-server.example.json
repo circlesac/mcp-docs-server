@@ -1,0 +1,6 @@
+{
+  "name": "Acme Documentation Server",
+  "package": "@acme/mcp-docs-server",
+  "version": "0.1.0",
+  "docs": "docs"
+}

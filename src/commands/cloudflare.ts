@@ -3,11 +3,11 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { readPackageUp, readPackageUpSync } from "read-package-up"
-
-import type { DocsServerConfig } from "../config.js"
-import { CONFIG_FILENAME, loadConfig } from "../config.js"
-import { promptsDirectoryExists } from "../prompts/loader.js"
-import { sanitizePackageDirName } from "../utils.js"
+import { promptsDirectoryExists } from "../handlers/prompts.js"
+import { resourcesDirectoryExists } from "../handlers/resources.js"
+import type { DocsServerConfig } from "../utils/config.js"
+import { CONFIG_FILENAME, loadConfig } from "../utils/config.js"
+import { sanitizePackageDirName } from "../utils/index.js"
 
 export interface CloudflareOptions {
 	configPath?: string
@@ -46,6 +46,9 @@ export async function handleCloudflare(options: CloudflareOptions = {}): Promise
 
 	// Copy prompts directory if it exists
 	await copyPrompts(config, buildDir)
+
+	// Copy resources directory if it exists
+	await copyResources(config, buildDir)
 
 	// Copy config file (use the resolved configPath from above)
 	await fs.cp(configPath, path.join(buildDir, "mcp-docs-server.json"), { force: true })
@@ -105,24 +108,26 @@ async function copyDocs(config: DocsServerConfig, buildDir: string): Promise<voi
 }
 
 async function copySourceFiles(packageRoot: string, buildDir: string): Promise<void> {
-	// Copy all source files needed by cloudflare.ts to src/ subdirectory
-	const filesToCopy = ["config.ts", "logger.ts", "tools/docs.ts", "utils.ts"]
+	// Copy tools directory
+	const toolsSourcePath = path.join(packageRoot, "src", "tools")
+	const toolsTargetPath = path.join(buildDir, "src", "tools")
+	await fs.mkdir(path.dirname(toolsTargetPath), { recursive: true })
+	await fs.cp(toolsSourcePath, toolsTargetPath, { recursive: true, force: true })
 
-	for (const file of filesToCopy) {
-		const sourcePath = path.join(packageRoot, "src", file)
-		const targetPath = path.join(buildDir, "src", file)
-		await fs.mkdir(path.dirname(targetPath), { recursive: true })
-		await fs.cp(sourcePath, targetPath, { force: true })
-	}
+	// Copy utils directory (contains config.ts, logger.ts, index.ts)
+	const utilsSourcePath = path.join(packageRoot, "src", "utils")
+	const utilsTargetPath = path.join(buildDir, "src", "utils")
+	await fs.mkdir(path.dirname(utilsTargetPath), { recursive: true })
+	await fs.cp(utilsSourcePath, utilsTargetPath, { recursive: true, force: true })
 
-	// Copy prompts directory if it exists in source
-	const promptsSourcePath = path.join(packageRoot, "src", "prompts")
-	const promptsTargetPath = path.join(buildDir, "src", "prompts")
+	// Copy handlers directory (contains prompts.ts, tools.ts, resources.ts)
+	const handlersSourcePath = path.join(packageRoot, "src", "handlers")
+	const handlersTargetPath = path.join(buildDir, "src", "handlers")
 	try {
-		await fs.access(promptsSourcePath)
-		await fs.cp(promptsSourcePath, promptsTargetPath, { recursive: true, force: true })
+		await fs.access(handlersSourcePath)
+		await fs.cp(handlersSourcePath, handlersTargetPath, { recursive: true, force: true })
 	} catch {
-		// Prompts directory doesn't exist in source, skip
+		// Handlers directory doesn't exist in source, skip
 	}
 }
 
@@ -130,6 +135,14 @@ async function copyPrompts(config: DocsServerConfig, buildDir: string): Promise<
 	if (await promptsDirectoryExists(config.rootDir)) {
 		const sourcePath = path.join(config.rootDir, "prompts")
 		const targetPath = path.join(buildDir, "prompts")
+		await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
+	}
+}
+
+async function copyResources(config: DocsServerConfig, buildDir: string): Promise<void> {
+	if (await resourcesDirectoryExists(config.rootDir)) {
+		const sourcePath = path.join(config.rootDir, "resources")
+		const targetPath = path.join(buildDir, "resources")
 		await fs.cp(sourcePath, targetPath, { recursive: true, force: true })
 	}
 }

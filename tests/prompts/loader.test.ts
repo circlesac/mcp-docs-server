@@ -3,7 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { getPromptsDirectory, loadPrompts, promptsDirectoryExists } from "../../src/prompts/loader.js"
+import { loadPrompts, promptsDirectoryExists } from "../../src/handlers/prompts.js"
 
 describe("prompts loader", () => {
 	let tempDir: string
@@ -32,14 +32,6 @@ describe("prompts loader", () => {
 		})
 	})
 
-	describe("getPromptsDirectory", () => {
-		it("returns correct prompts directory path", () => {
-			const rootDir = "/some/path"
-			const promptsPath = getPromptsDirectory(rootDir)
-			expect(promptsPath).toBe(path.join(rootDir, "prompts"))
-		})
-	})
-
 	describe("loadPrompts", () => {
 		it("returns empty array when prompts directory does not exist", async () => {
 			const nonExistentDir = path.join(os.tmpdir(), "non-existent-" + Date.now())
@@ -57,11 +49,11 @@ Hello! This is a simple prompt.`
 			expect(prompts.length).toBe(1)
 			expect(prompts[0].name).toBe("welcome")
 			expect(prompts[0].title).toBe("welcome")
-			expect(prompts[0].description).toBe("Prompt: welcome")
+			expect(prompts[0].description).toBeUndefined()
 			expect(prompts[0].argsSchema.shape).toEqual({})
 
 			// Test callback
-			const result = prompts[0].callback({})
+			const result = await prompts[0].callback({})
 			expect(result.messages[0].role).toBe("user")
 			expect(result.messages[0].content.type).toBe("text")
 			expect(result.messages[0].content.text).toContain("Hello!")
@@ -81,11 +73,9 @@ args:
     optional: true
 ---
 
-Review this {{language}} code:
+Review this {language} code:
 
-\`\`\`{{language}}
-{{code}}
-\`\`\``
+{code}`
 
 			await fs.writeFile(path.join(promptsDir, "review-code.mdx"), promptContent)
 
@@ -98,7 +88,7 @@ Review this {{language}} code:
 			expect(reviewPrompt?.argsSchema.shape.language).toBeDefined()
 
 			// Test callback with args
-			const result = reviewPrompt!.callback({
+			const result = await reviewPrompt!.callback({
 				code: "const x = 1",
 				language: "javascript"
 			})
@@ -106,23 +96,26 @@ Review this {{language}} code:
 			expect(result.messages[0].content.text).toContain("const x = 1")
 		})
 
-		it("skips prompts with invalid placeholders (logs warning)", async () => {
+		it("loads prompt with placeholder not in args, but throws when invoked", async () => {
 			const promptContent = `---
-title: Invalid Prompt
+title: Test Prompt
 args:
   name:
     type: string
     required: true
 ---
 
-Hello {{name}}, your age is {{age}}.`
+Hello {name}, your age is {age}.`
 
-			await fs.writeFile(path.join(promptsDir, "invalid.mdx"), promptContent)
+			await fs.writeFile(path.join(promptsDir, "test.mdx"), promptContent)
 
-			// Loader catches errors and logs warnings, so invalid prompts are skipped
+			// Prompts with placeholders not in args load successfully, but throw when invoked
 			const prompts = await loadPrompts(tempDir)
-			const invalidPrompt = prompts.find((p) => p.name === "invalid")
-			expect(invalidPrompt).toBeUndefined()
+			const testPrompt = prompts.find((p) => p.name === "test")
+			expect(testPrompt).toBeDefined()
+
+			// When invoked, {age} is undefined so MDX throws ReferenceError
+			await expect(testPrompt!.callback({ name: "Alice" })).rejects.toThrow(ReferenceError)
 		})
 
 		it("ignores non-markdown files", async () => {
@@ -153,14 +146,15 @@ Content 2`
 			expect(names).toContain("prompt2")
 		})
 
-		it("skips .mdx file without frontmatter (logs warning)", async () => {
+		it("loads .mdx file without frontmatter as simple prompt", async () => {
 			const promptContent = `This is an MDX file without frontmatter.`
 			await fs.writeFile(path.join(promptsDir, "no-frontmatter.mdx"), promptContent)
 
-			// Loader catches errors and logs warnings, so invalid files are skipped
 			const prompts = await loadPrompts(tempDir)
 			const noFrontmatterPrompt = prompts.find((p) => p.name === "no-frontmatter")
-			expect(noFrontmatterPrompt).toBeUndefined()
+			expect(noFrontmatterPrompt).toBeDefined()
+			expect(noFrontmatterPrompt?.title).toBe("no-frontmatter")
+			expect(noFrontmatterPrompt?.argsSchema.shape).toEqual({})
 		})
 	})
 })

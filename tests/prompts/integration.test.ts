@@ -2,10 +2,8 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { readPackageUpSync } from "read-package-up"
 import { describe, expect, it } from "vitest"
-
-import { loadConfig } from "../../src/config.js"
-import { registerPrompts } from "../../src/prompts/index.js"
-import { loadPrompts } from "../../src/prompts/loader.js"
+import { loadPrompts, registerPrompts } from "../../src/handlers/prompts.js"
+import { loadConfig } from "../../src/utils/config.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, "..", "..")
@@ -41,7 +39,6 @@ describe("prompts integration", () => {
 		const setupGuide = prompts.find((p) => p.name === "setup-guide")
 		expect(setupGuide).toBeDefined()
 		expect(setupGuide?.title).toBeDefined()
-		expect(setupGuide?.description).toBeDefined()
 		expect(setupGuide?.argsSchema).toBeDefined()
 		expect(setupGuide?.callback).toBeDefined()
 	})
@@ -54,7 +51,7 @@ describe("prompts integration", () => {
 		expect(queryDocs).toBeDefined()
 
 		// Invoke the prompt callback with arguments
-		const result = queryDocs!.callback({
+		const result = await queryDocs!.callback({
 			topic: "deployment",
 			context: "I need help with Cloudflare"
 		})
@@ -77,7 +74,7 @@ describe("prompts integration", () => {
 		const setupGuide = prompts.find((p) => p.name === "setup-guide")
 		expect(setupGuide).toBeDefined()
 
-		const result = setupGuide!.callback({})
+		const result = await setupGuide!.callback({})
 		expect(result).toBeDefined()
 		expect(result.messages).toBeDefined()
 		expect(result.messages.length).toBeGreaterThan(0)

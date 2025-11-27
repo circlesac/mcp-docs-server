@@ -3,7 +3,7 @@
 import { handleCloudflare } from "./commands/cloudflare.js"
 import { publishDocs } from "./commands/publish.js"
 import { runServer } from "./commands/serve.js"
-import { logger } from "./logger.js"
+import { logger } from "./utils/logger.js"
 
 async function printUsage(): Promise<void> {
 	await logger.info(`Usage: npx @circlesac/mcp-docs-server [command]
