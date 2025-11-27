@@ -3,6 +3,7 @@
 import { handleCloudflare } from "./commands/cloudflare.js"
 import { publishDocs } from "./commands/publish.js"
 import { runServer } from "./commands/serve.js"
+import { getBundledConfigPath } from "./utils/config.js"
 import { logger } from "./utils/logger.js"
 
 async function printUsage(): Promise<void> {
@@ -106,8 +107,8 @@ async function main() {
 	try {
 		switch (command) {
 			case undefined:
-				// Default: serve from current working directory
-				await runServer()
+				// Default: use bundled config from npm package
+				await runServer({ configPath: getBundledConfigPath() })
 				break
 			case "serve": {
 				const options = parseServeArgs(args.slice(1))

@@ -1,6 +1,6 @@
 {
   "name": "@circlesac/mcp-docs-server",
-  "version": "0.1.2",
+	"version": "0.1.5",
   "description": "Simple CLI for serving Markdown docs as an MCP server and packaging them for npm.",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,6 +11,8 @@
     "src",
     "templates",
     "docs",
+    "prompts",
+    "resources",
     "mcp-docs-server.json",
     "wrangler.json"
   ],

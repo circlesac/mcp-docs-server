@@ -1,5 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { readPackageUpSync } from "read-package-up"
 import { z } from "zod"
 
 export const CONFIG_FILENAME = "mcp-docs-server.json"
@@ -116,6 +118,7 @@ export function loadConfig(options: { configPath: string; templatePath: string; 
 	// templatePath is required
 	const template = fs.readFileSync(options.templatePath, "utf-8")
 	const description = template.replace(/{{NAME}}/g, name).replace(/{{TOOL_NAME}}/g, toolName)
+
 	return {
 		name,
 		title,
@@ -128,4 +131,17 @@ export function loadConfig(options: { configPath: string; templatePath: string; 
 		rootDir,
 		raw: rawConfig
 	}
+}
+
+/**
+ * Get the bundled config path from the npm package
+ */
+export function getBundledConfigPath(): string {
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const packageRootResult = readPackageUpSync({ cwd: moduleDir })
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+	return path.join(packageRoot, CONFIG_FILENAME)
 }
