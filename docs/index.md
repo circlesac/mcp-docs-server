@@ -6,7 +6,10 @@ Welcome to the bundled documentation for `mcp-docs-server`. This server is shipp
 
 `mcp-docs-server` lets you share your Markdown documentation as an MCP (Model Context Protocol) server. With just two files—a `docs/` directory and a `mcp-docs-server.json` config file—you can make your documentation accessible to coding agents like Cursor and Claude.
 
-You can also add a `prompts/` directory to create reusable prompt templates that clients can invoke with customizable arguments.
+You can also add:
+
+- A `prompts/` directory to create reusable prompt templates that clients can invoke with customizable arguments
+- A `resources/` directory to expose any file type (JSON, images, configs, etc.) as browsable MCP resources
 
 ## Three Deployment Modes
 
@@ -30,6 +33,10 @@ The tool supports three ways to serve your documentation:
 
 - **[Prompts Guide](./prompts.md)** - Create reusable prompt templates with arguments
 
+### Resources
+
+- **[Resources Guide](./resources.md)** - Expose any file type as browsable MCP resources
+
 ### Commands
 
 - **[Commands Overview](./commands/index.md)** - Overview of all available commands
@@ -44,6 +51,7 @@ The tool supports three ways to serve your documentation:
 | [Getting Started](./getting-started.md) | Introduction and quick setup guide   |
 | [Configuration](./configuration.md)     | Configuration file reference         |
 | [Prompts](./prompts.md)                 | Create reusable prompt templates     |
+| [Resources](./resources.md)             | Expose files as browsable resources  |
 | [Commands](./commands/index.md)         | Overview of all commands             |
 | [serve](./commands/serve.md)            | Local STDIO server command           |
 | [publish](./commands/publish.md)        | npm package publishing command       |
