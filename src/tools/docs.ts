@@ -9,7 +9,14 @@ import { getMatchingPaths, normalizeDocPath } from "../utils/index.js"
 import { logger } from "../utils/logger.js"
 
 // Infer ToolDefinition type from registerTool signature
-type ToolDefinition = Parameters<McpServer["registerTool"]>[1]
+type ToolDefinition<InputArgs extends z.ZodRawShape | z.ZodTypeAny = z.ZodRawShape> = {
+	title?: string
+	description?: string
+	inputSchema?: InputArgs
+	outputSchema?: InputArgs
+	annotations?: unknown
+	_meta?: Record<string, unknown>
+}
 
 type ReadMdResult = { found: true; content: string; isSecurityViolation: boolean } | { found: false; isSecurityViolation: boolean }
 
@@ -42,10 +49,7 @@ export async function createDocsTool(config: DocsServerConfig) {
 	})
 	const toolName = config.tool
 
-	// Return structure that matches SDK's registerTool signature
-	const inputSchema = docsParameters.shape
-
-	const callback: ToolCallback<typeof inputSchema> = async (args, _extra) => {
+	const callback: ToolCallback<typeof docsParameters> = async (args, _extra) => {
 		void logger.debug(`Executing ${toolName} tool`, { args })
 		const queryKeywords = args.queryKeywords ?? []
 		const docRoot = config.docRoot.absolutePath
@@ -99,8 +103,8 @@ export async function createDocsTool(config: DocsServerConfig) {
 		name: toolName,
 		config: {
 			description: config.description,
-			inputSchema
-		} satisfies ToolDefinition,
+			inputSchema: docsParameters
+		} satisfies ToolDefinition<typeof docsParameters>,
 		cb: callback
 	}
 }
