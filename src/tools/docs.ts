@@ -2,39 +2,42 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
+import { stringify } from "yaml"
 import { z } from "zod"
 
 import type { DocRoot, DocsServerConfig } from "../utils/config.js"
 import { getMatchingPaths, normalizeDocPath } from "../utils/index.js"
 import { logger } from "../utils/logger.js"
 
-// Infer ToolDefinition type from registerTool signature
-type ToolDefinition<InputArgs extends z.ZodRawShape | z.ZodTypeAny = z.ZodRawShape> = {
-	title?: string
-	description?: string
-	inputSchema?: InputArgs
-	outputSchema?: InputArgs
-	annotations?: unknown
-	_meta?: Record<string, unknown>
+type FileContent = {
+	type: "file"
+	path: string
+	content: string
 }
 
-type ReadMdResult = { found: true; content: string; isSecurityViolation: boolean } | { found: false; isSecurityViolation: boolean }
+type DirectoryContent = {
+	type: "directory"
+	path: string
+	subdirectories: string[]
+	files: string[]
+	suggestions?: string
+}
+
+type ErrorContent = {
+	type: "error"
+	path: string
+	error: string
+	suggestions?: string
+}
+
+type DocResult = FileContent | DirectoryContent | ErrorContent
+
+type ReadMdResult = { found: true; result: FileContent | DirectoryContent; isSecurityViolation: boolean } | { found: false; isSecurityViolation: boolean }
 
 interface ResolvedDocPath {
 	absolutePath: string
 	relativePath: string
 }
-
-const pathsSchema = z.array(z.string()).min(1)
-const docsParametersSchema = z.object({
-	paths: pathsSchema,
-	queryKeywords: z
-		.array(z.string())
-		.optional()
-		.describe(
-			"Keywords from user query to use for matching documentation. Each keyword should be a single word or short phrase; whitespace-separated keywords will be split automatically."
-		)
-})
 
 interface TopLevelEntries {
 	directories: string[]
@@ -44,67 +47,141 @@ interface TopLevelEntries {
 
 export async function createDocsTool(config: DocsServerConfig) {
 	const pathsDescription = await buildPathsDescription(config.docRoot, config)
-	const docsParameters = docsParametersSchema.extend({
-		paths: pathsSchema.describe(pathsDescription)
+	const docsParameters = z.object({
+		paths: z.array(z.string()).min(1).describe(pathsDescription),
+		queryKeywords: z
+			.array(z.string())
+			.optional()
+			.describe(
+				"Keywords from user query to use for matching documentation. Each keyword should be a single word or short phrase; whitespace-separated keywords will be split automatically."
+			)
 	})
 	const toolName = config.tool
 
+	// Define callback with ToolCallback type using type assertion to bridge Zod's types with MCP SDK's types
 	const callback: ToolCallback<typeof docsParameters> = async (args, _extra) => {
 		void logger.debug(`Executing ${toolName} tool`, { args })
 		const queryKeywords = args.queryKeywords ?? []
 		const docRoot = config.docRoot.absolutePath
 		const availablePaths = await buildAvailablePaths(config)
 
-		const results = await Promise.all(
-			args.paths.map(async (docPath) => {
+		const results: DocResult[] = await Promise.all(
+			args.paths.map(async (docPath: string): Promise<DocResult> => {
 				try {
 					const result = await readMdContent(docPath, queryKeywords, config)
 					if (result.found) {
-						return { path: docPath, content: result.content, error: null }
+						return result.result
 					}
 					if (result.isSecurityViolation) {
-						return { path: docPath, content: null, error: "Invalid path" }
+						return {
+							type: "error",
+							path: docPath,
+							error: "Invalid path"
+						}
 					}
 					const suggestions = await getMatchingPaths(docPath, queryKeywords, [docRoot])
-					const errorMessage = [`Path "${docPath}" not found.`, availablePaths, suggestions].filter(Boolean).join("\n\n")
-					return { path: docPath, content: null, error: errorMessage }
+					const errorMessage = `Path "${docPath}" not found.`
+					return {
+						type: "error",
+						path: docPath,
+						error: errorMessage,
+						suggestions: suggestions || undefined
+					}
 				} catch (error) {
 					await logger.warning(`Failed to read content for path: ${docPath}`, error)
 					return {
+						type: "error",
 						path: docPath,
-						content: null,
 						error: error instanceof Error ? error.message : "Unknown error"
 					}
 				}
 			})
 		)
 
-		const output = results
-			.map((result) => {
-				if (result.error) {
-					return `## ${result.path}\n\n${result.error}\n\n---\n`
-				}
-				return `## ${result.path}\n\n${result.content}\n\n---\n`
-			})
-			.join("\n")
+		// Return each result as a separate content item with frontmatter
+		const contentItems = results.map((result) => {
+			const frontmatter: Record<string, unknown> = {
+				path: result.path
+			}
 
-		// Return CallToolResult format
-		return {
-			content: [
-				{
-					type: "text" as const,
-					text: output
+			if (result.type === "error") {
+				frontmatter.error = result.error
+				// availablePaths and suggestions are in the body, not frontmatter
+				const frontmatterStr = formatFrontmatter(frontmatter)
+
+				// Build error body with error message, available paths, and suggestions
+				const errorBodyLines: string[] = []
+				errorBodyLines.push(result.error)
+
+				// Only include availablePaths and suggestions for non-security violations
+				// Security violations (Invalid path) should not expose available paths
+				if (result.error !== "Invalid path") {
+					if (availablePaths) {
+						errorBodyLines.push("")
+						errorBodyLines.push(availablePaths)
+					}
+
+					if (result.suggestions) {
+						errorBodyLines.push("")
+						errorBodyLines.push(result.suggestions)
+					}
 				}
-			]
+
+				return {
+					type: "text" as const,
+					text: `${frontmatterStr}\n\n${errorBodyLines.join("\n")}`
+				}
+			}
+
+			if (result.type === "file") {
+				const frontmatterStr = formatFrontmatter(frontmatter)
+				return {
+					type: "text" as const,
+					text: `${frontmatterStr}\n\n${result.content}`
+				}
+			}
+
+			// Directory
+			if (result.suggestions) {
+				frontmatter.suggestions = result.suggestions
+			}
+			const frontmatterStr = formatFrontmatter(frontmatter)
+
+			const directoryBody = formatDirectoryContent(result)
+			return {
+				type: "text" as const,
+				text: `${frontmatterStr}\n\n${directoryBody}`
+			}
+		})
+
+		return {
+			content: contentItems
 		} satisfies CallToolResult
 	}
+
+	// Define output schema to describe the response format
+	const outputSchema = z.object({
+		content: z.array(
+			z.object({
+				type: z.literal("text"),
+				text: z
+					.string()
+					.describe(
+						"Text content with YAML frontmatter followed by body. Frontmatter includes: path (required), error (for errors), suggestions (for directories). Body contains file content, directory listing, or error details with availablePaths and suggestions."
+					)
+			})
+		)
+	})
 
 	return {
 		name: toolName,
 		config: {
 			description: config.description,
-			inputSchema: docsParameters
-		} satisfies ToolDefinition<typeof docsParameters>,
+			inputSchema: docsParameters,
+			outputSchema
+		},
+		// The callback is properly typed as ToolCallback<typeof docsParameters>
+		// Type assertion bridges Zod's types with MCP SDK's expected callback type
 		cb: callback
 	}
 }
@@ -174,39 +251,28 @@ async function readMdContent(docPath: string, queryKeywords: string[], config: D
 		const stats = await fs.stat(resolved.absolutePath)
 
 		if (stats.isDirectory()) {
-			const { dirs, files, rawFiles } = await listDirContents(rootPrefix, resolved, config)
-			const header = [
-				`Directory contents of ${docPath}:`,
-				"",
-				dirs.length > 0 ? "Subdirectories:" : "No subdirectories.",
-				...dirs.map((d) => `- ${d}`),
-				"",
-				files.length > 0 ? "Files in this directory:" : "No files in this directory.",
-				...files.map((f) => `- ${f}`),
-				"",
-				"---",
-				"",
-				"Contents of all files in this directory:",
-				""
-			].join("\n")
-
-			let fileContents = ""
-			for (let index = 0; index < rawFiles.length; index += 1) {
-				const fileName = rawFiles[index]
-				const displayPath = files[index] ?? fileName
-				const filePath = path.join(resolved.absolutePath, fileName)
-				const content = await fs.readFile(filePath, "utf-8")
-				fileContents += `\n\n# ${displayPath}\n\n${content}`
-			}
+			const { dirs, files } = await listDirContents(rootPrefix, resolved, config)
 
 			const suggestions = await getMatchingPaths(docPath, queryKeywords, [config.docRoot.absolutePath])
-			const suggestionBlock = suggestions ? ["", "---", "", suggestions].join("\n") : ""
 
-			return { found: true, content: header + fileContents + suggestionBlock, isSecurityViolation: false }
+			const directoryResult: DirectoryContent = {
+				type: "directory",
+				path: docPath,
+				subdirectories: dirs,
+				files,
+				suggestions: suggestions || undefined
+			}
+
+			return { found: true, result: directoryResult, isSecurityViolation: false }
 		}
 
 		const content = await fs.readFile(resolved.absolutePath, "utf-8")
-		return { found: true, content, isSecurityViolation: false }
+		const fileResult: FileContent = {
+			type: "file",
+			path: docPath,
+			content
+		}
+		return { found: true, result: fileResult, isSecurityViolation: false }
 	} catch (error) {
 		await logger.error("Failed to read documentation content", { docPath, error: error instanceof Error ? error.message : String(error) })
 		throw error
@@ -261,9 +327,9 @@ async function resolveDocPath(docPath: string, config: DocsServerConfig): Promis
 	return { isSecurityViolation: false, resolved: null, rootPrefix }
 }
 
-async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath, _config: DocsServerConfig): Promise<{ dirs: string[]; files: string[]; rawFiles: string[] }> {
+async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath, _config: DocsServerConfig): Promise<{ dirs: string[]; files: string[] }> {
 	const dirEntries: string[] = []
-	const fileEntries: Array<{ display: string; name: string }> = []
+	const fileEntries: string[] = []
 
 	const entries = await fs.readdir(resolved.absolutePath, { withFileTypes: true })
 
@@ -271,20 +337,16 @@ async function listDirContents(rootPrefix: string, resolved: ResolvedDocPath, _c
 		if (entry.isDirectory()) {
 			dirEntries.push(buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, true))
 		} else if (entry.isFile() && entry.name.endsWith(".md")) {
-			fileEntries.push({
-				display: buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, false),
-				name: entry.name
-			})
+			fileEntries.push(buildDisplayPath(resolved.relativePath, entry.name, rootPrefix, false))
 		}
 	}
 
 	dirEntries.sort((a, b) => a.localeCompare(b))
-	fileEntries.sort((a, b) => a.display.localeCompare(b.display))
+	fileEntries.sort((a, b) => a.localeCompare(b))
 
 	return {
 		dirs: dirEntries,
-		files: fileEntries.map((entry) => entry.display),
-		rawFiles: fileEntries.map((entry) => entry.name)
+		files: fileEntries
 	}
 }
 
@@ -345,4 +407,51 @@ function hasTraversal(input: string): boolean {
 
 function isMarkdownFile(name: string): boolean {
 	return /\.mdx?$/i.test(name)
+}
+
+function formatFrontmatter(data: Record<string, unknown>): string {
+	// Filter out undefined and null values
+	const cleaned: Record<string, unknown> = {}
+	for (const [key, value] of Object.entries(data)) {
+		if (value !== undefined && value !== null) {
+			cleaned[key] = value
+		}
+	}
+
+	// Use yaml library to stringify
+	const yamlContent = stringify(cleaned, {
+		lineWidth: 0, // Don't wrap lines
+		minContentWidth: 0
+	})
+
+	return `---\n${yamlContent}---`
+}
+
+function formatDirectoryContent(result: DirectoryContent): string {
+	const lines: string[] = []
+
+	lines.push(`# Directory: ${result.path}\n`)
+
+	if (result.subdirectories.length > 0) {
+		lines.push("## Subdirectories\n")
+		result.subdirectories.forEach((dir) => {
+			lines.push(`- ${dir}`)
+		})
+		lines.push("")
+	}
+
+	if (result.files.length > 0) {
+		lines.push("## Files\n")
+		result.files.forEach((file) => {
+			lines.push(`- ${file}`)
+		})
+		lines.push("")
+	}
+
+	if (result.suggestions) {
+		lines.push("---\n")
+		lines.push(result.suggestions)
+	}
+
+	return lines.join("\n")
 }

@@ -25,6 +25,8 @@ COPY mcp-docs-server.json ./
 # Publish test-mcp-docs-server package
 RUN node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('mcp-docs-server.json'));c.package='test-mcp-docs-server';fs.writeFileSync('mcp-docs-server.json',JSON.stringify(c))"
 RUN npx @circlesac/mcp-docs-server publish --output /tmp/test-mcp-docs-server-package
+# Update package.json to use local package instead of "latest" from npm
+RUN node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('/tmp/test-mcp-docs-server-package/package.json'));pkg.dependencies['@circlesac/mcp-docs-server']='file:/workspace/package.tgz';fs.writeFileSync('/tmp/test-mcp-docs-server-package/package.json',JSON.stringify(pkg,null,2))"
 RUN npm pack /tmp/test-mcp-docs-server-package && TARBALL=$(ls test-mcp-docs-server-*.tgz | head -1) && mv $TARBALL /workspace/test-mcp-docs-server.tgz
 RUN npm install -g /workspace/test-mcp-docs-server.tgz
 RUN timeout 2 npx test-mcp-docs-server || true

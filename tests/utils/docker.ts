@@ -62,19 +62,34 @@ export async function dockerExec(command: string, containerName: string): Promis
 	})
 }
 
-export async function dockerSpawn(command: string, containerName: string): Promise<{ process: ReturnType<typeof spawn>; output: Promise<string> }> {
+export async function dockerSpawn(command: string, containerName: string, detached = false): Promise<{ process: ReturnType<typeof spawn>; output: Promise<string> }> {
 	return new Promise((resolve) => {
-		const proc = spawn("docker", ["exec", "-i", containerName, "sh", "-c", command], {
-			stdio: ["pipe", "pipe", "pipe"]
+		// Use -d flag for detached mode (e.g., for wrangler dev that needs to run independently)
+		// Without -d, the process is attached to Node.js and may inherit environment/context issues
+		const execArgs = detached ? ["exec", "-d", containerName, "sh", "-c", command] : ["exec", containerName, "sh", "-c", command]
+
+		const proc = spawn("docker", execArgs, {
+			stdio: detached ? ["ignore", "ignore", "ignore"] : ["ignore", "pipe", "pipe"]
 		})
 
+		if (detached) {
+			// For detached mode, we can't capture output, so return empty output promise
+			const outputPromise = Promise.resolve("")
+			resolve({ process: proc, output: outputPromise })
+			return
+		}
+
 		let output = ""
-		proc.stdout.on("data", (data) => {
-			output += data.toString()
-		})
-		proc.stderr.on("data", (data) => {
-			output += data.toString()
-		})
+		if (proc.stdout) {
+			proc.stdout.on("data", (data) => {
+				output += data.toString()
+			})
+		}
+		if (proc.stderr) {
+			proc.stderr.on("data", (data) => {
+				output += data.toString()
+			})
+		}
 
 		const outputPromise = new Promise<string>((resolveOutput) => {
 			proc.on("close", () => {
@@ -87,8 +102,19 @@ export async function dockerSpawn(command: string, containerName: string): Promi
 }
 
 export async function buildDockerImage(): Promise<void> {
+	const repoRoot = path.resolve(__dirname, "..", "..")
+
+	// Remove existing image to force rebuild
 	try {
-		const { stderr } = await execAsync(`docker build -t ${DOCKER_IMAGE} .`)
+		await execAsync(`docker rmi ${DOCKER_IMAGE} 2>/dev/null || true`)
+		console.info("Removed existing Docker image")
+	} catch {
+		// Image might not exist, that's fine
+	}
+
+	try {
+		console.info("Building Docker image...")
+		const { stderr } = await execAsync(`docker build -t ${DOCKER_IMAGE} .`, { cwd: repoRoot })
 		if (stderr && !stderr.toString().includes("WARNING")) {
 			console.warn(`Docker build stderr: ${stderr}`)
 		}

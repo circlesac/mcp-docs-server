@@ -6,3 +6,5 @@ coverage/
 .wrangler/
 worker-configuration.d.ts
 *.log
+.channels_cache_v2.json
+.users_cache.json

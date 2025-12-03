@@ -201,8 +201,6 @@ async function generateWranglerConfig(config: DocsServerConfig, buildDir: string
 		name: workerName,
 		main: "./src/index.ts",
 		...(accountId && { account_id: accountId })
-		// No vars needed - we read from bundled mcp-docs-server.json instead
-		// Keep rules, migrations, durable_objects, etc. from root config
 	}
 
 	await fs.writeFile(path.join(buildDir, "wrangler.json"), `${JSON.stringify(wranglerConfig, null, 2)}\n`)

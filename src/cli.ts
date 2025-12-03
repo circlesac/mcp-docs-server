@@ -1,10 +1,28 @@
 #!/usr/bin/env node
 
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { handleCloudflare } from "./commands/cloudflare.js"
 import { publishDocs } from "./commands/publish.js"
 import { runServer } from "./commands/serve.js"
-import { getBundledConfigPath } from "./utils/config.js"
+import { CONFIG_FILENAME } from "./utils/config.js"
 import { logger } from "./utils/logger.js"
+
+/**
+ * Get the bundled config path from the npm package
+ * Uses dynamic import to avoid bundling read-package-up in Cloudflare Workers
+ * This function is only used in CLI code, not in worker code
+ */
+async function getBundledConfigPath(): Promise<string> {
+	const { readPackageUpSync } = await import("read-package-up")
+	const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+	const packageRootResult = readPackageUpSync({ cwd: moduleDir })
+	if (!packageRootResult?.path) {
+		throw new Error("package.json not found. This indicates a packaging error.")
+	}
+	const packageRoot = path.dirname(packageRootResult.path)
+	return path.join(packageRoot, CONFIG_FILENAME)
+}
 
 async function printUsage(): Promise<void> {
 	await logger.info(`Usage: npx @circlesac/mcp-docs-server [command]
@@ -108,7 +126,7 @@ async function main() {
 		switch (command) {
 			case undefined:
 				// Default: use bundled config from npm package
-				await runServer({ configPath: getBundledConfigPath() })
+				await runServer({ configPath: await getBundledConfigPath() })
 				break
 			case "serve": {
 				const options = parseServeArgs(args.slice(1))
