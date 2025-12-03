@@ -20,7 +20,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bunx rimraf dist && bunx tsc --project tsconfig.build.json",
+    "build": "bunx rimraf dist && npx -p @typescript/native-preview tsgo --project tsconfig.build.json",
     "build:docker": "docker build -t mcp-docs-server .",
     "dev:docker": "bun run build:docker && docker run --rm -v \"$(pwd)/.build:/mcp-docs-server/.build\" mcp-docs-server sh -c \"cd /mcp-docs-server && npx @circlesac/mcp-docs-server cloudflare --dry-run\" && cd .build/cloudflare && npx wrangler dev",
     "prepublishOnly": "bun run scripts/check-version.ts && bun run build",
