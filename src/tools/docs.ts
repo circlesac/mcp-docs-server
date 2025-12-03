@@ -159,26 +159,16 @@ export async function createDocsTool(config: DocsServerConfig) {
 		} satisfies CallToolResult
 	}
 
-	// Define output schema to describe the response format
-	const outputSchema = z.object({
-		content: z.array(
-			z.object({
-				type: z.literal("text"),
-				text: z
-					.string()
-					.describe(
-						"Text content with YAML frontmatter followed by body. Frontmatter includes: path (required), error (for errors), suggestions (for directories). Body contains file content, directory listing, or error details with availablePaths and suggestions."
-					)
-			})
-		)
-	})
+	// Output format: Returns an array of text content items, each with YAML frontmatter followed by body.
+	// Frontmatter includes: path (required), error (for errors), suggestions (for directories).
+	// Body contains file content, directory listing, or error details with availablePaths and suggestions.
+	const toolDescription = `${config.description}\n\nOutput format: Returns an array of text content items, each with YAML frontmatter followed by body. Frontmatter includes: path (required), error (for errors), suggestions (for directories). Body contains file content, directory listing, or error details with availablePaths and suggestions.`
 
 	return {
 		name: toolName,
 		config: {
-			description: config.description,
-			inputSchema: docsParameters,
-			outputSchema
+			description: toolDescription,
+			inputSchema: docsParameters
 		},
 		// The callback is properly typed as ToolCallback<typeof docsParameters>
 		// Type assertion bridges Zod's types with MCP SDK's expected callback type

@@ -32,8 +32,10 @@ export async function runServer(options: RunServerOptions = {}): Promise<void> {
 	const templatePath = path.join(packageRoot, "templates", "docs.mdx")
 
 	const config = loadConfig({ configPath, templatePath, docs: options.docs })
-	console.info(`[mcp-docs-server] Config: ${configPath}`)
-	console.info(`[mcp-docs-server] Docs: ${config.docRoot.absolutePath}`)
+	// Note: Don't use console.info/log here - stdout is reserved for JSON-RPC in stdio mode
+	// Use console.error for any debug output (writes to stderr)
+	console.error(`[mcp-docs-server] Config: ${configPath}`)
+	console.error(`[mcp-docs-server] Docs: ${config.docRoot.absolutePath}`)
 	const server = await createServer(config)
 
 	try {
