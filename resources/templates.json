@@ -1,0 +1,8 @@
+[
+  {
+    "uriTemplate": "config://schemas/{filename}",
+    "name": "JSON Schema Resources",
+    "description": "JSON schema files for mcp-docs-server configuration",
+    "mimeType": "application/schema+json"
+  }
+]

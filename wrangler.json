@@ -1,0 +1,20 @@
+{
+  "name": "mcp-docs-server",
+  "main": "./src/cloudflare.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "enable_nodejs_fs_module"],
+  "base_dir": ".",
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["docs/**/*.md", "templates/**/*.mdx", "prompts/**/*.md", "prompts/**/*.mdx", "mcp-docs-server.json"],
+      "fallthrough": true
+    },
+    {
+      "type": "Data",
+      "globs": ["resources/**/*"],
+      "fallthrough": true
+    }
+  ]
+}

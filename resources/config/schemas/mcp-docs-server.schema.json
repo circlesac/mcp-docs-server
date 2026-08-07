@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "mcp-docs-server Configuration Schema",
+  "description": "Schema for mcp-docs-server.json configuration file",
+  "type": "object",
+  "required": ["name", "package", "version"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human label surfaced by the MCP server. Used to generate tool names and descriptions.",
+      "examples": ["Acme Documentation Server", "My Project Docs"]
+    },
+    "package": {
+      "type": "string",
+      "description": "npm package name used when publishing. Supports scopes (e.g., @acme/mcp-docs-server).",
+      "pattern": "^(@[a-z0-9-~][a-z0-9-._~]*/)?[a-z0-9-~][a-z0-9-._~]*$",
+      "examples": ["@acme/mcp-docs-server", "my-project-docs"]
+    },
+    "version": {
+      "type": "string",
+      "description": "npm version published by the publish command. Should follow semantic versioning.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-.*)?$",
+      "examples": ["0.1.0", "1.0.0", "2.3.4-beta.1"]
+    },
+    "docs": {
+      "type": "string",
+      "description": "Relative folder containing Markdown files. Defaults to 'docs' if not specified.",
+      "default": "docs",
+      "examples": ["docs", "documentation", "guides"]
+    }
+  },
+  "additionalProperties": false
+}

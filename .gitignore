@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.build/
+.DS_Store
+.wrangler/
+worker-configuration.d.ts
+*.log
+.channels_cache_v2.json
+.users_cache.json
+.claude/settings.local.json
